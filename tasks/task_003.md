@@ -1,0 +1,66 @@
+# Task ID: 3
+
+## User Profile Management
+
+- **Status:** pending
+- **Dependencies:** 2
+- **Priority:** high
+- **Description:** Create user profile system with professional information, profile editing, and role-based access control.
+- **Details:**
+  1. Design user profile database schema in Supabase
+  2. Create ZOD schema for user profile validation
+  3. Implement profile creation on user registration
+  4. Create profile edit form with validation
+  5. Implement role-based access control (RBAC) system
+  6. Create user profile page with professional information display
+  7. Add profile image upload using Supabase storage
+  8. Implement user settings page
+  9. Create API endpoints for profile operations
+  10. Add user role management for administrators
+- **Test Strategy:**
+  Test profile creation, editing, and retrieval. Verify image uploads work correctly. Test RBAC by attempting actions with different user roles. Ensure validation prevents invalid data submission.
+
+## Subtasks:
+
+- [ ] **1. Database Schema and API Endpoints** `[pending]`
+
+  - **Dependencies:** None
+  - **Description:** Design and implement the database schema for user profiles and create the necessary API endpoints for CRUD operations.
+  - **Details:**
+    Database design considerations: Create tables for users, roles, permissions, and user settings with appropriate relationships. Include fields for profile information (name, email, phone, etc.), authentication details, and timestamps. API endpoints needed: GET /users, GET /users/:id, POST /users, PUT /users/:id, DELETE /users/:id. Validation requirements: Ensure proper data types, required fields, and unique constraints. UI components: None for this subtask as it's backend focused.
+    <info added on 2025-05-18T10:12:13.121Z>
+    Database design considerations: Create tables in Supabase for users, roles, permissions, and user settings with appropriate relationships. Include fields for profile information (name, email, phone, etc.), authentication details, and timestamps.
+
+    API endpoints needed: Implement NextJS API Routes for CRUD operations - GET /api/users, GET /api/users/[id], POST /api/users, PUT /api/users/[id], DELETE /api/users/[id]. These API routes will interact with Supabase to perform data operations.
+
+    Validation requirements: Ensure proper data types, required fields, and unique constraints.
+
+    Acceptance criteria:
+
+    - Supabase database schema properly implemented with Row Level Security
+    - NextJS API Routes correctly connected to Supabase client
+    - API endpoints return proper responses and handle errors appropriately
+    - Authentication and authorization properly integrated with API endpoints
+
+    UI components: None for this subtask as it's backend focused.
+    </info added on 2025-05-18T10:12:13.121Z>
+
+- [ ] **2. Profile Creation and Editing Functionality** `[pending]`
+
+  - **Dependencies:** 3.1
+  - **Description:** Implement the frontend and backend logic for creating and editing user profiles.
+  - **Details:**
+    Database design considerations: Ensure proper validation rules are implemented in the database layer. Validation requirements: Client and server-side validation for email format, password strength, required fields, and character limits. UI components needed: Registration form, profile edit form, form validation messages, success/error notifications. Implement form submission handlers and API integration.
+
+- [ ] **3. Role-Based Access Control Implementation** `[pending]`
+
+  - **Dependencies:** 3.1
+  - **Description:** Implement RBAC system to manage user permissions and access levels throughout the application.
+  - **Details:**
+    Database design considerations: Ensure proper relationships between users, roles, and permissions tables. Create middleware for permission checking. Validation requirements: Validate role assignments, prevent privilege escalation, ensure proper authorization checks. UI components needed: Role management interface, permission assignment forms, access denied screens, conditional rendering based on permissions.
+
+- [ ] **4. Profile Image Handling and User Settings** `[pending]`
+  - **Dependencies:** 3.2
+  - **Description:** Implement functionality for uploading, storing, and displaying profile images along with user preference settings.
+  - **Details:**
+    Database design considerations: Store image metadata in the database with file paths/URLs, create user_settings table with preferences. Validation requirements: Validate file types, sizes, and dimensions for images, sanitize user preference inputs. UI components needed: Image upload widget with preview, cropping tool, settings form with toggles/inputs for preferences, notification settings panel.
