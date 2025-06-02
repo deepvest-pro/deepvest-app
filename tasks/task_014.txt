@@ -17,7 +17,7 @@
 10. Create consistent spacing and typography system
 
 # Test Strategy:
-Test UI on various device sizes and orientations. Verify touch interactions work correctly on mobile devices. Test keyboard navigation for accessibility. Ensure dark mode works consistently across all components.
+Manually verify UI on various device sizes and orientations using browser DevTools. Check touch interactions on physical mobile devices. Test keyboard navigation for accessibility. Ensure dark mode works consistently across all components by visual inspection.
 
 # Subtasks:
 ## 1. Responsive Layout System and Breakpoints [pending]
@@ -42,5 +42,5 @@ Create responsive form layouts that stack on mobile. Implement tables that trans
 ### Dependencies: 14.1, 14.2, 14.3
 ### Description: Implement theme switching functionality and finalize the responsive design system
 ### Details:
-Create CSS variables for theming. Implement dark mode toggle with user preference detection. Ensure sufficient contrast ratios in both themes (minimum 4.5:1). Document the complete design system with component usage guidelines. Test theme switching on all devices and browsers. Verify that all components maintain accessibility in both themes. Create automated tests for responsive behaviors.
+Create CSS variables for theming. Implement dark mode toggle with user preference detection. Ensure sufficient contrast ratios in both themes (minimum 4.5:1). Document the complete design system with component usage guidelines. Test theme switching on all devices and browsers. Verify that all components maintain accessibility in both themes. Manually test responsive behaviors across different screen sizes.
 

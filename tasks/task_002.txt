@@ -30,7 +30,7 @@ Test user registration, login, and logout flows. Verify email verification proce
 4. Create authentication API service with proper error handling
 5. Implement CSRF protection mechanisms
 6. Security considerations: Use HTTPS, implement rate limiting, secure token storage
-7. Testing: Unit tests for context and hooks, mock API responses for testing auth flows
+7. Testing: Manually verify context and hooks functionality, test API responses through browser interactions
 
 ## 2. Email/Password Authentication with Verification [pending]
 ### Dependencies: 2.1
@@ -42,7 +42,7 @@ Test user registration, login, and logout flows. Verify email verification proce
 4. Create login endpoint with rate limiting
 5. Implement password reset functionality
 6. Security considerations: Password strength requirements, account lockout after failed attempts, secure email templates
-7. Testing: Integration tests for registration, login, and verification flows; security testing for password policies
+7. Testing: Manually verify registration, login, and verification flows through browser testing; verify password policy enforcement
 
 ## 3. OAuth Provider Integration [pending]
 ### Dependencies: 2.1
@@ -54,7 +54,7 @@ Test user registration, login, and logout flows. Verify email verification proce
 4. Handle OAuth token refresh and expiration
 5. Implement profile data synchronization from OAuth providers
 6. Security considerations: Validate OAuth state parameters, secure client secrets, implement proper scopes
-7. Testing: Integration tests with mock OAuth servers, test account linking and unlinking
+7. Testing: Manually verify OAuth authentication through browser testing, verify account linking and unlinking functionality
 
 ## 4. Protected Routes and Session Management [pending]
 ### Dependencies: 2.1, 2.2, 2.3
@@ -66,7 +66,7 @@ Test user registration, login, and logout flows. Verify email verification proce
 4. Create secure logout functionality across devices
 5. Implement activity tracking for security purposes
 6. Security considerations: JWT validation, session fixation prevention, secure session storage
-7. Testing: Unit tests for route protection, integration tests for session management, security testing for session hijacking prevention
+7. Testing: Manually verify route protection and redirect behavior, test session management across browser sessions, check for session expiration
 
 ## 5. Authentication UI Pages [pending]
 ### Dependencies: 2.1, 2.2, 2.3, 2.4
@@ -78,5 +78,5 @@ Test user registration, login, and logout flows. Verify email verification proce
 4. Create account management interface for linked accounts
 5. Implement responsive designs for all authentication pages
 6. Security considerations: Implement CAPTCHA for forms, clear sensitive data on component unmount, prevent auto-fill on sensitive fields
-7. Testing: UI component tests, accessibility testing, cross-browser compatibility testing
+7. Testing: Manually verify UI components in browser, test accessibility with keyboard navigation, check compatibility across Chrome, Firefox, and Safari
 

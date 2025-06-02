@@ -25,6 +25,21 @@ Test profile creation, editing, and retrieval. Verify image uploads work correct
 ### Description: Design and implement the database schema for user profiles and create the necessary API endpoints for CRUD operations.
 ### Details:
 Database design considerations: Create tables for users, roles, permissions, and user settings with appropriate relationships. Include fields for profile information (name, email, phone, etc.), authentication details, and timestamps. API endpoints needed: GET /users, GET /users/:id, POST /users, PUT /users/:id, DELETE /users/:id. Validation requirements: Ensure proper data types, required fields, and unique constraints. UI components: None for this subtask as it's backend focused.
+<info added on 2025-05-18T10:12:13.121Z>
+Database design considerations: Create tables in Supabase for users, roles, permissions, and user settings with appropriate relationships. Include fields for profile information (name, email, phone, etc.), authentication details, and timestamps.
+
+API endpoints needed: Implement NextJS API Routes for CRUD operations - GET /api/users, GET /api/users/[id], POST /api/users, PUT /api/users/[id], DELETE /api/users/[id]. These API routes will interact with Supabase to perform data operations.
+
+Validation requirements: Ensure proper data types, required fields, and unique constraints.
+
+Acceptance criteria:
+- Supabase database schema properly implemented with Row Level Security
+- NextJS API Routes correctly connected to Supabase client
+- API endpoints return proper responses and handle errors appropriately
+- Authentication and authorization properly integrated with API endpoints
+
+UI components: None for this subtask as it's backend focused.
+</info added on 2025-05-18T10:12:13.121Z>
 
 ## 2. Profile Creation and Editing Functionality [pending]
 ### Dependencies: 3.1

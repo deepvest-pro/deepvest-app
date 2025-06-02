@@ -45,16 +45,16 @@ Estimated Time: 2 hours
 Steps:
 1. Set up ESLint with appropriate rules
 2. Configure Prettier for code formatting
-3. Install and configure Tailwind CSS
+3. Set up SCSS modules structure
 4. Set up Husky for pre-commit hooks
-5. Install UI component libraries (shadcn/ui)
+5. Install Radix UI component libraries
 
 Acceptance Criteria:
 - ESLint runs without errors on the codebase
 - Prettier formats code according to project standards
-- Tailwind CSS is properly configured and working
+- SCSS modules structure is properly configured and working
 - Pre-commit hooks prevent commits with linting errors
-- UI components can be imported and used
+- Radix UI components can be imported and used
 
 Estimated Time: 3 hours
 
@@ -87,14 +87,16 @@ Steps:
 2. Create README.md with project documentation
 3. Establish folder structure (pages, components, lib, etc.)
 4. Configure CI/CD pipeline with GitHub Actions
-5. Create deployment configuration for Vercel
+5. Create deployment configuration for DigitalOcean
+6. Configure Docker setup for DigitalOcean deployment
 
 Acceptance Criteria:
 - Repository is properly initialized with all files
 - README contains clear setup and contribution instructions
 - Folder structure follows NextJS best practices
 - CI/CD pipeline successfully runs on pull requests
-- Project can be deployed to Vercel
+- Project can be deployed to DigitalOcean
+- Docker configuration is properly set up for production deployment
 
 Estimated Time: 3 hours
 
