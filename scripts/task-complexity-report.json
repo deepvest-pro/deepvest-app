@@ -1,0 +1,131 @@
+{
+  "meta": {
+    "generatedAt": "2025-05-17T21:54:45.731Z",
+    "tasksAnalyzed": 15,
+    "thresholdScore": 5,
+    "projectName": "Taskmaster",
+    "usedResearch": true
+  },
+  "complexityAnalysis": [
+    {
+      "taskId": 1,
+      "taskTitle": "Project Setup and Configuration",
+      "complexityScore": 6,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Break down the Project Setup and Configuration task into 4 logical subtasks: 1) NextJS project initialization with TypeScript, 2) Code quality and dependency setup, 3) Supabase integration and configuration, and 4) Project structure and repository setup. For each subtask, include specific steps, acceptance criteria, and estimated time.",
+      "reasoning": "This task involves multiple technical configurations but follows standard patterns. The existing details already outline 10 steps that can be logically grouped into 4 subtasks. Medium complexity due to integration requirements but well-defined steps."
+    },
+    {
+      "taskId": 2,
+      "taskTitle": "Authentication System Implementation",
+      "complexityScore": 8,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Divide the Authentication System Implementation into 5 subtasks: 1) Authentication context and core functionality, 2) Email/password authentication with verification, 3) OAuth provider integration, 4) Protected routes and session management, and 5) Authentication UI pages. For each subtask, include specific implementation steps, security considerations, and testing requirements.",
+      "reasoning": "Authentication is inherently complex with security implications. Multiple OAuth providers add complexity, and proper session management requires careful implementation. The task involves both frontend and backend components with critical security requirements."
+    },
+    {
+      "taskId": 3,
+      "taskTitle": "User Profile Management",
+      "complexityScore": 7,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Split the User Profile Management task into 4 subtasks: 1) Database schema and API endpoints, 2) Profile creation and editing functionality, 3) Role-based access control implementation, and 4) Profile image handling and user settings. For each subtask, include database design considerations, validation requirements, and UI components needed.",
+      "reasoning": "This task involves database design, RBAC implementation, and file uploads which add complexity. It requires both frontend and backend work with careful consideration for data validation and security permissions."
+    },
+    {
+      "taskId": 4,
+      "taskTitle": "Project Creation and Basic Editing",
+      "complexityScore": 7,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Divide the Project Creation and Basic Editing task into 4 subtasks: 1) Project database schema and validation, 2) Multi-step creation form with draft mode, 3) Project editing and status management, and 4) Rich text editing and API endpoints. For each subtask, include form state management considerations, validation rules, and UI/UX requirements.",
+      "reasoning": "Multi-step forms with validation and draft functionality add complexity. Rich text editing and proper state management require careful implementation. The task spans database design, API development, and complex form handling."
+    },
+    {
+      "taskId": 5,
+      "taskTitle": "Team Management and Permissions",
+      "complexityScore": 8,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down the Team Management and Permissions task into 5 subtasks: 1) Team database schema and validation, 2) Team creation and profile management, 3) Invitation system with email notifications, 4) Permission and role management, and 5) API endpoints and permission enforcement. For each subtask, include security considerations, email integration requirements, and UI components needed.",
+      "reasoning": "Permission systems are inherently complex and require careful design. Email notifications add external dependencies. The task involves complex database relationships and security implications that must be thoroughly tested."
+    },
+    {
+      "taskId": 6,
+      "taskTitle": "Project Snapshot Versioning",
+      "complexityScore": 9,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Split the Project Snapshot Versioning task into 5 subtasks: 1) Snapshot database schema and storage strategy, 2) Snapshot creation and metadata tracking, 3) Snapshot history and comparison UI, 4) Restoration functionality, and 5) Diffing visualization and API endpoints. For each subtask, include data structure considerations, performance optimizations, and UI requirements.",
+      "reasoning": "Versioning systems are highly complex, especially with diffing and restoration capabilities. This requires sophisticated data structures, efficient storage strategies, and complex UI for visualization. Performance considerations are critical for large datasets."
+    },
+    {
+      "taskId": 7,
+      "taskTitle": "Content and Metrics Management",
+      "complexityScore": 7,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Divide the Content and Metrics Management task into 4 subtasks: 1) Database schema and validation for content and metrics, 2) Content management UI and approval workflow, 3) Metrics input and visualization components, and 4) Search functionality and analytics dashboard. For each subtask, include data visualization requirements, workflow considerations, and performance optimizations.",
+      "reasoning": "This task combines content management with metrics visualization, requiring both database design and UI components. The approval workflow adds complexity, and metrics visualization requires specialized components and performance considerations."
+    },
+    {
+      "taskId": 8,
+      "taskTitle": "Leaderboard with Categories Implementation",
+      "complexityScore": 8,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Break down the Leaderboard with Categories Implementation into 4 subtasks: 1) Leaderboard database schema and calculation logic, 2) Category management system, 3) Leaderboard UI with filtering and sorting, and 4) Trending algorithms and API endpoints. For each subtask, include performance considerations, sorting/filtering requirements, and UI components needed.",
+      "reasoning": "Leaderboards require complex calculation logic and efficient database queries. The trending algorithm adds algorithmic complexity. Multiple filtering and sorting options require careful UI design and performance optimization."
+    },
+    {
+      "taskId": 9,
+      "taskTitle": "Discovery and Search Features",
+      "complexityScore": 9,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Split the Discovery and Search Features task into 5 subtasks: 1) Search index and full-text search implementation, 2) Advanced filtering and sorting system, 3) Saved searches and history tracking, 4) Discovery feed with recommendations, and 5) API endpoints and analytics. For each subtask, include search optimization techniques, UI/UX considerations, and performance requirements.",
+      "reasoning": "Search functionality is inherently complex, especially with full-text capabilities and advanced filtering. The personalized recommendation system adds algorithmic complexity. Performance optimization is critical for search features to ensure responsive user experience."
+    },
+    {
+      "taskId": 10,
+      "taskTitle": "AI Scoring Integration",
+      "complexityScore": 9,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Divide the AI Scoring Integration task into 5 subtasks: 1) Scoring database schema and validation, 2) AI algorithm integration and API, 3) Score calculation triggers and processing, 4) Score visualization and history UI, and 5) Explanation features and analytics. For each subtask, include AI integration requirements, performance considerations, and visualization components needed.",
+      "reasoning": "AI integration adds significant complexity with external dependencies. The scoring algorithm requires careful design and optimization. Explaining AI decisions adds another layer of complexity. This task combines advanced algorithms with database design and visualization."
+    },
+    {
+      "taskId": 11,
+      "taskTitle": "AI Recommendations System",
+      "complexityScore": 9,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down the AI Recommendations System into 5 subtasks: 1) Recommendation database schema and validation, 2) AI algorithm integration for suggestions, 3) Recommendation generation and prioritization, 4) Feedback and implementation tracking, and 5) UI components and analytics. For each subtask, include AI integration requirements, feedback loop considerations, and UI/UX design needs.",
+      "reasoning": "AI recommendation systems are highly complex, requiring sophisticated algorithms and feedback loops. The implementation tracking adds workflow complexity. This task combines AI integration with database design and interactive UI components."
+    },
+    {
+      "taskId": 12,
+      "taskTitle": "Advanced Analytics and Reporting",
+      "complexityScore": 8,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Split the Advanced Analytics and Reporting task into 5 subtasks: 1) Analytics database schema and calculation system, 2) Data visualization components, 3) Custom report builder, 4) Export and scheduling functionality, and 5) Dashboard with customizable widgets. For each subtask, include data processing requirements, visualization libraries needed, and export format specifications.",
+      "reasoning": "Analytics systems require complex data processing and visualization. The custom report builder and scheduling add significant complexity. Export functionality requires handling multiple formats. This task combines data processing, visualization, and scheduling systems."
+    },
+    {
+      "taskId": 13,
+      "taskTitle": "SEO and Performance Optimization",
+      "complexityScore": 7,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Divide the SEO and Performance Optimization task into 4 subtasks: 1) SEO implementation (meta tags, structured data, sitemap), 2) Image and content optimization, 3) Code and rendering optimization, and 4) Accessibility and performance monitoring. For each subtask, include specific optimization techniques, measurement metrics, and testing procedures.",
+      "reasoning": "Performance optimization requires specialized knowledge across multiple domains. SEO best practices need to be implemented consistently. The task involves both frontend and backend optimizations with measurable performance targets."
+    },
+    {
+      "taskId": 14,
+      "taskTitle": "Responsive UI Implementation",
+      "complexityScore": 7,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Break down the Responsive UI Implementation task into 4 subtasks: 1) Responsive layout system and breakpoints, 2) Navigation and core UI components, 3) Responsive forms and data displays, and 4) Dark mode and design system implementation. For each subtask, include device testing requirements, accessibility considerations, and component specifications.",
+      "reasoning": "Responsive design across multiple device sizes requires careful planning and testing. Complex components like tables and charts need special mobile adaptations. Dark mode adds theme management complexity. This task requires consistent implementation across the entire application."
+    },
+    {
+      "taskId": 15,
+      "taskTitle": "Social Features and Engagement",
+      "complexityScore": 8,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Split the Social Features and Engagement task into 5 subtasks: 1) Social database schema and validation, 2) Follow system and activity feed, 3) Notification system implementation, 4) Commenting and reaction functionality, and 5) Sharing features and analytics. For each subtask, include real-time update requirements, notification delivery mechanisms, and UI components needed.",
+      "reasoning": "Social features often require real-time updates and complex database relationships. Notification systems add delivery complexity. The activity feed requires efficient queries and updates. This task combines database design, real-time functionality, and interactive UI components."
+    }
+  ]
+}

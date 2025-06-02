@@ -1,0 +1,62 @@
+# DeepVest - Platform for Startups and Investors
+
+## Project Overview
+DeepVest is a platform that serves as a centralized repository of structured information about startups. It is designed to simplify interactions between startups and investors (angels and funds). The main goal of the project is to standardize startup data and provide convenient access to it, so that startups can effectively present their projects to potential investors, while investors can quickly evaluate promising investment opportunities with minimal human resource involvement thanks to AI-based automation.
+
+## Technical Requirements
+- NextJS (latest version) with Server-Side Rendering (SSR) mode
+- TypeScript for type safety and developer experience
+- ZOD for schema validation and type generation
+- TanStack Query for data fetching, caching, and state management
+- Supabase for backend-as-a-service (authentication, database, storage)
+- Radix UI as the core component library (no Tailwind-based UI libraries)
+- SCSS modules for component-level styling
+
+## Key Features
+1. **Startup Repository**
+   - Database of startups with uniform structure
+   - Startups independently fill out project forms
+   - All startup data is public (if not in draft mode)
+   - Free access to startup information
+
+2. **Scoring and Analytics**
+   - Automatic startup evaluation using AI
+   - Basic scoring is free
+   - Deep analytics available through paid reports or social mechanics
+
+3. **User Authentication**
+   - Email/password authentication with verification
+   - OAuth social login (Google, LinkedIn, X, GitHub)
+   - Role-based access control
+   - User profiles with professional information
+
+4. **Project Management**
+   - Project snapshot versioning
+   - Team management and permissions
+   - Content and metrics management
+   - Leaderboard with categories
+
+5. **AI Integration**
+   - Automatic project scoring
+   - AI recommendations for project improvement
+   - Filtering and ranking of startups
+
+## UI/UX Requirements
+- Content-first and mobile-first design
+- Responsive layout for all device sizes
+- Accessibility compliance (WCAG 2.1 AA)
+- Performance optimization for Core Web Vitals
+- Proper SEO implementation
+
+## Data Structure
+The platform includes complex data structures for projects, snapshots, team members, content, scoring, categories, tags, and other entities as detailed in the data-structure.md document.
+
+## Development Priority
+1. User authentication and profile management
+2. Project creation and basic editing
+3. Team management and permissions
+4. Project snapshot versioning
+5. Leaderboard and discovery features
+6. AI scoring integration
+7. Recommendations system
+8. Advanced analytics and reporting 
