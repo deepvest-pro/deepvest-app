@@ -22,7 +22,7 @@
 
 ## Subtasks:
 
-- [ ] **1. NextJS Project Initialization with TypeScript** `[pending]`
+- [x] **1. NextJS Project Initialization with TypeScript** `[completed]`
 
   - **Dependencies:** None
   - **Description:** Set up a new NextJS project with TypeScript configuration and essential dependencies
@@ -39,7 +39,7 @@
     - Project runs locally with npm run dev
   - **Estimated Time:** 2 hours
 
-- [ ] **2. Code Quality and Dependency Setup** `[pending]`
+- [x] **2. Code Quality and Dependency Setup** `[completed]`
 
   - **Dependencies:** 1.1
   - **Description:** Configure linting, formatting, and install necessary dependencies for development

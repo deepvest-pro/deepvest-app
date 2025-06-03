@@ -1,0 +1,40 @@
+// Theme variables based on Radix UI
+@use 'sass:color';
+
+// Colors - using Radix UI color system
+$primary-blue: var(--blue-9);
+$primary-hover: var(--blue-10);
+$primary-active: var(--blue-11);
+
+$primary-text: var(--gray-12);
+$secondary-text: var(--gray-11);
+$disabled-text: var(--gray-8);
+
+// Spacing
+$spacing-1: 4px;
+$spacing-2: 8px;
+$spacing-3: 12px;
+$spacing-4: 16px;
+$spacing-5: 24px;
+$spacing-6: 32px;
+$spacing-7: 48px;
+$spacing-8: 64px;
+
+// Breakpoints (matching Radix default)
+$breakpoint-xs: 520px;
+$breakpoint-sm: 768px;
+$breakpoint-md: 1024px;
+$breakpoint-lg: 1280px;
+$breakpoint-xl: 1640px;
+
+// Z-index layers
+$z-index-dropdown: 1000;
+$z-index-modal: 1500;
+$z-index-tooltip: 2000;
+
+// Export as module
+:export {
+  primaryBlue: $primary-blue;
+  breakpointSm: $breakpoint-sm;
+  breakpointMd: $breakpoint-md;
+}
