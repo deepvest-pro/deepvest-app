@@ -29,12 +29,14 @@
   - [x] Design form layout with proper fields
   - [x] Implement form validation with Zod
   - [x] Create success/error notifications
+  - [ ] Integrate Radix UI Toast for form success/error notifications
   - [x] Add responsive design for different devices
 - [x] Implement API integration
   - [x] Connect form to profile update API
   - [x] Handle loading states properly
   - [x] Handle API errors gracefully
   - [x] Implement optimistic updates
+  - [ ] Add toast notifications for successful API operations
 
 ## User Interface Components
 
@@ -56,15 +58,17 @@
   - [ ] Create upload component with preview
   - [ ] Add drag-and-drop functionality
   - [ ] Implement file type validation
+  - [ ] Add toast notifications for upload progress and completion
 - [ ] Implement image processing
   - [ ] Add image resizing functionality
   - [ ] Create image cropping interface
   - [ ] Optimize images for storage and delivery
+  - [ ] Display toast notifications for successful image processing
 - [ ] Handle image display
   - [ ] Create avatar component with fallback
   - [ ] Implement lazy loading for images
   - [ ] Add placeholder during image loading
-  - [ ] Handle image loading errors
+  - [ ] Handle image loading errors with toast error notifications
 
 ## Role-Based Access Control (To be implemented with Projects)
 
@@ -95,3 +99,21 @@
 - [ ] Document profile management features
   - [ ] Update API documentation
   - [ ] Document profile schema
+
+## Toast Notifications System
+
+- [ ] Set up Toast component infrastructure
+  - [ ] Install Radix UI Toast package
+  - [ ] Create base Toast component with appropriate styling
+  - [ ] Implement ToastProvider at app root level
+  - [ ] Set up swipe-to-dismiss functionality for mobile
+- [ ] Create Toast helper utilities
+  - [ ] Implement useToast hook for component access
+  - [ ] Create toast notification functions (success, error, info, warning)
+  - [ ] Add configuration for toast duration and positioning
+  - [ ] Implement queuing mechanism for multiple toasts
+- [ ] Ensure accessibility
+  - [ ] Add appropriate ARIA labels and roles
+  - [ ] Implement keyboard navigation and dismissal
+  - [ ] Test with screen readers
+  - [ ] Ensure proper focus management

@@ -15,7 +15,9 @@ export async function createServerSupabaseClient() {
   try {
     cookieStore = await cookies();
   } catch {
-    console.warn('Unable to access cookie store, using memory storage instead');
+    console.debug(
+      'Unable to access cookie store during server-side client creation, using memory storage instead.',
+    );
     // Fallback for contexts where cookies() are not available
     const memoryStore = new Map<string, string>();
 
