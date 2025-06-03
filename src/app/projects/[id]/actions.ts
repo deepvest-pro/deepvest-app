@@ -1,19 +1,16 @@
 'use server';
 
-// import { createServerActionClient } from '@supabase/auth-helpers-nextjs'; // Old helper
 import { revalidatePath } from 'next/cache';
-import { checkUserProjectRole } from '@/lib/supabase/helpers';
 import type { Database } from '@/types/supabase';
+import { checkUserProjectRole } from '@/lib/supabase/helpers';
 import { createSupabaseServerClient } from '@/lib/supabase/client'; // New client
 
 interface ToggleProjectPublicationArgs {
   projectId: string;
   isCurrentlyPublic: boolean;
-  // newSnapshotId is removed as it will be fetched from DB inside the action
 }
 
 export async function toggleProjectPublication({
-  // newSnapshotId removed from params
   projectId,
   isCurrentlyPublic,
 }: ToggleProjectPublicationArgs): Promise<{
@@ -243,6 +240,62 @@ export async function publishDraft({ projectId }: PublishDraftArgs): Promise<{
     return { success: true };
   } catch (error) {
     console.error('[Action] Unexpected error in publishDraft:', error);
+    return { success: false, error: 'An unexpected error occurred' };
+  }
+}
+
+interface DeleteProjectArgs {
+  projectId: string;
+}
+
+export async function deleteProject({ projectId }: DeleteProjectArgs): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  console.log(`[Action] deleteProject called for project ${projectId}`);
+
+  try {
+    const supabase = await createSupabaseServerClient();
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error('[Action] User not authenticated:', authError);
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    console.log(`[Action] User authenticated: ${user.id}`);
+
+    // Check if user is owner
+    const isOwner = await checkUserProjectRole(user.id, projectId, 'owner');
+    if (!isOwner) {
+      console.warn(`[Action] User ${user.id} is not owner of project ${projectId}.`);
+      return { success: false, error: 'Only the project owner can delete this project' };
+    }
+
+    console.log(`[Action] User ${user.id} is confirmed owner of project ${projectId}`);
+
+    // Delete project directly using Supabase (will cascade delete permissions and snapshots due to DB constraints)
+    const { error: deleteError } = await supabase.from('projects').delete().eq('id', projectId);
+
+    if (deleteError) {
+      console.error(`[Action] Supabase delete error:`, deleteError);
+      return { success: false, error: deleteError.message };
+    }
+
+    console.log(`[Action] Project ${projectId} deleted successfully`);
+
+    // Revalidate paths (but not the current project page since it no longer exists)
+    revalidatePath('/projects');
+    revalidatePath('/profile');
+    // Note: We don't revalidate `/projects/${projectId}` because the project no longer exists
+
+    return { success: true };
+  } catch (error) {
+    console.error('[Action] Unexpected error in deleteProject:', error);
     return { success: false, error: 'An unexpected error occurred' };
   }
 }

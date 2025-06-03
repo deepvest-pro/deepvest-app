@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState, useTransition } from 'react';
-import { Heading, Text, Card, Box, Flex, Button, Tabs } from '@radix-ui/themes';
-import { ProjectRole, ProjectWithSnapshot } from '@/types/supabase';
-import { Container } from '@radix-ui/themes';
 import Link from 'next/link';
-import { Pencil1Icon, GlobeIcon, EyeClosedIcon } from '@radix-ui/react-icons';
-import { toggleProjectPublication, publishDraft } from '@/app/projects/[id]/actions';
+import { useRouter } from 'next/navigation';
+import { Container } from '@radix-ui/themes';
+import { Pencil1Icon, GlobeIcon, EyeClosedIcon, TrashIcon } from '@radix-ui/react-icons';
+import { Heading, Text, Card, Box, Flex, Button, Tabs, AlertDialog } from '@radix-ui/themes';
+import { ProjectRole, ProjectWithSnapshot } from '@/types/supabase';
+import { toggleProjectPublication, publishDraft, deleteProject } from '@/app/projects/[id]/actions';
 import { useToastHelpers } from '@/components/layout/ToastProvider';
 
 interface ProjectDetailsProps {
@@ -24,7 +25,9 @@ export function ProjectDetails({
   const [project, setProject] = useState(initialProject);
   const [activeTab, setActiveTab] = useState('details');
   const [isPending, startTransition] = useTransition();
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const { success: toastSuccess, error: toastError } = useToastHelpers();
+  const router = useRouter();
 
   const canEdit = userRole === 'admin' || userRole === 'owner' || userRole === 'editor';
   const isOwner = userRole === 'owner';
@@ -128,6 +131,16 @@ export function ProjectDetails({
               </Button>
             </Link>
           )}
+          {isOwner && (
+            <Button
+              variant="soft"
+              color="red"
+              onClick={() => setShowDeleteDialog(true)}
+              disabled={isPending}
+            >
+              <TrashIcon />
+            </Button>
+          )}
         </Flex>
       </Flex>
 
@@ -228,6 +241,56 @@ export function ProjectDetails({
           </Tabs.Content>
         </Box>
       </Tabs.Root>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog.Root open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialog.Content style={{ maxWidth: 450 }}>
+          <AlertDialog.Title>Delete Project</AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            Are you sure you want to delete &ldquo;{projectName}&rdquo;? This action cannot be
+            undone and will permanently remove the project and all its data.
+          </AlertDialog.Description>
+
+          <Flex gap="3" mt="4" justify="end">
+            <AlertDialog.Cancel>
+              <Button variant="soft" color="gray">
+                Cancel
+              </Button>
+            </AlertDialog.Cancel>
+            <AlertDialog.Action>
+              <Button
+                variant="solid"
+                color="red"
+                onClick={() => {
+                  startTransition(async () => {
+                    try {
+                      const result = await deleteProject({
+                        projectId: project.id,
+                      });
+
+                      if (result.success) {
+                        toastSuccess('Project deleted successfully');
+                        // Redirect to projects page using Next.js router
+                        router.push('/projects');
+                      } else {
+                        toastError(result.error || 'Failed to delete project');
+                        setShowDeleteDialog(false);
+                      }
+                    } catch (error) {
+                      console.error('Delete project error:', error);
+                      toastError('An unexpected error occurred while deleting project.');
+                      setShowDeleteDialog(false);
+                    }
+                  });
+                }}
+                disabled={isPending}
+              >
+                {isPending ? 'Deleting...' : 'Delete Project'}
+              </Button>
+            </AlertDialog.Action>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
     </Container>
   );
 }

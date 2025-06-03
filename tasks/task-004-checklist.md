@@ -89,12 +89,14 @@
   - [x] Handle concurrent editing conflicts (via snapshot system)
   - [x] Show toast notifications for successful edits and validation errors
   - [x] "Publish Draft" functionality with conditional UI
-- [ ] Implement deletion functionality (deferred to future task)
-  - [ ] Create confirmation dialog
-  - [ ] Implement soft delete if applicable
-  - [ ] Add cascade deletion for related data
-  - [ ] Handle permissions for deletion operations
-  - [ ] Display toast notifications for successful deletion and errors
+- [x] Implement deletion functionality ✅ **COMPLETED**
+  - [x] Create confirmation dialog using Radix UI AlertDialog
+  - [x] Implement hard delete with cascade deletion for related data
+  - [x] Add proper permissions for deletion operations (owner only)
+  - [x] Display toast notifications for successful deletion and errors
+  - [x] Redirect to projects list after successful deletion
+  - [x] Handle authentication and authorization properly
+  - [x] Use Next.js router for proper navigation
 - [ ] Build version history if applicable (deferred to future task)
   - [ ] Design version tracking system
   - [ ] Create interface for viewing previous versions
@@ -225,13 +227,52 @@
 - [x] Toast notifications for user feedback
 - [x] Database security and RLS policies
 - [x] API endpoints for all core operations
+- [x] **Project deletion functionality** ✅ **NEW**
+  - [x] Delete button with trash icon for project owners
+  - [x] Confirmation dialog with project name
+  - [x] Secure server action with proper authentication
+  - [x] Cascade deletion of related data (snapshots, permissions)
+  - [x] Toast notifications and proper error handling
+  - [x] Redirect to projects list after deletion
 
 **DEFERRED TO FUTURE TASKS:**
 
-- [ ] Multi-step project creation form (complex UI enhancement)
+- [x] Multi-step project creation form (complex UI enhancement)
 - [ ] Rich text editing (requires editor integration)
-- [ ] Project deletion functionality (separate safety-critical feature)
 - [ ] Advanced project listing with filters (separate feature)
 - [ ] Version history and rollback (advanced feature)
 
-**READY FOR NEXT TASK:** The core project editing functionality is complete and working. The system supports creating, editing, and publishing projects with proper security and user experience.
+## Project Deletion Implementation Details ✅ **COMPLETED**
+
+### Implementation Summary
+
+- **Delete Button**: Added trash icon button visible only to project owners
+- **Confirmation Dialog**: Radix UI AlertDialog with project name confirmation
+- **Server Action**: Secure `deleteProject` function with proper authentication
+- **Database**: Cascade deletion via existing foreign key constraints
+- **Navigation**: Client-side redirect using Next.js `router.push()`
+- **UX**: Toast notifications for success/error states
+
+### Files Modified for Deletion Feature
+
+- `src/components/projects/ProjectDetails.tsx` - Added delete button and confirmation dialog
+- `src/app/projects/[id]/actions.ts` - Added `deleteProject` server action
+- `src/app/api/projects/[id]/route.ts` - DELETE endpoint (already existed)
+- Database schema - Cascade deletion via foreign key constraints (already configured)
+
+### Security & Permissions
+
+- Only project owners can see and use the delete button
+- Server action validates user authentication and ownership
+- Database constraints ensure proper cascade deletion
+- No orphaned data remains after deletion
+
+### User Experience
+
+- Clear visual confirmation dialog with project name
+- Loading states during deletion process
+- Success toast notification before redirect
+- Proper error handling with user-friendly messages
+- Smooth navigation back to projects list
+
+**READY FOR NEXT TASK:** The core project editing and deletion functionality is complete and working. The system supports creating, editing, publishing, and deleting projects with proper security and user experience.
