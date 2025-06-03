@@ -1,9 +1,9 @@
 'use client';
 
-import Link from 'next/link';
-import { PlusIcon } from '@radix-ui/react-icons';
-import { Heading, Container, Text, Box, Button, Flex, Card } from '@radix-ui/themes';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { PlusIcon, GlobeIcon } from '@radix-ui/react-icons';
+import { Heading, Container, Text, Box, Button, Flex, Card, Avatar, Badge } from '@radix-ui/themes';
 import type { ProjectWithSnapshot } from '@/types/supabase';
 
 interface ProjectsListProps {
@@ -49,6 +49,9 @@ export function ProjectsList({ isAuthenticated }: ProjectsListProps) {
     const projectName = currentSnapshot?.name || 'Unnamed Project';
     const projectDescription = currentSnapshot?.description || 'No description provided.';
     const projectStatus = currentSnapshot?.status || 'Unknown';
+    const logoUrl = currentSnapshot?.logo_url;
+    const projectCountry = currentSnapshot?.country;
+    const projectCity = currentSnapshot?.city;
 
     const isUserProject = project.role !== null && project.role !== undefined;
     const isPublic = project.is_public;
@@ -56,71 +59,96 @@ export function ProjectsList({ isAuthenticated }: ProjectsListProps) {
     return (
       <Card key={project.id} variant="surface">
         <Box p="4">
-          <Flex justify="between" align="start" mb="3">
-            <Box>
-              <Heading size="4" mb="1">
-                <Link href={`/projects/${project.id}`} className="hover:underline">
-                  {projectName}
-                </Link>
-              </Heading>
-              <Flex align="center" gap="2" mb="1">
-                <Text size="2" color="gray">
-                  /{project.slug}
+          <Flex gap="4" align="start">
+            {/* Project Logo */}
+            <Box style={{ flexShrink: 0 }}>
+              <Avatar
+                size="5"
+                src={logoUrl || undefined}
+                alt={`${projectName} logo`}
+                radius="medium"
+                fallback={projectName[0] || '?'}
+                style={{ width: '64px', height: '64px' }}
+              />
+            </Box>
+
+            {/* Project Content */}
+            <Box style={{ flex: 1, minWidth: 0 }}>
+              <Flex justify="between" align="start" mb="3">
+                <Box style={{ flex: 1, minWidth: 0 }}>
+                  <Heading size="4" mb="1">
+                    <Link href={`/projects/${project.id}`} className="hover:underline">
+                      {projectName}
+                    </Link>
+                  </Heading>
+                  <Flex align="center" gap="2" mb="1" wrap="wrap">
+                    {projectCountry && projectCity && (
+                      <Badge variant="soft" size="1" radius="full">
+                        <Flex gap="1" align="center">
+                          <GlobeIcon />
+                          <Text>
+                            {projectCity}, {projectCountry}
+                          </Text>
+                        </Flex>
+                      </Badge>
+                    )}
+                    {isUserProject && (
+                      <Text
+                        size="1"
+                        style={{
+                          backgroundColor: 'var(--blue-3)',
+                          color: 'var(--blue-11)',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          fontWeight: '500',
+                        }}
+                      >
+                        Your Project
+                      </Text>
+                    )}
+                    {isUserProject && !isPublic && (
+                      <Text
+                        size="1"
+                        style={{
+                          backgroundColor: 'var(--orange-3)',
+                          color: 'var(--orange-11)',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          fontWeight: '500',
+                        }}
+                      >
+                        Private
+                      </Text>
+                    )}
+                  </Flex>
+                </Box>
+              </Flex>
+
+              <Text
+                size="2"
+                mb="3"
+                style={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                }}
+              >
+                {projectDescription}
+              </Text>
+
+              <Flex justify="between" align="center">
+                <Text size="1" color="gray">
+                  Status: {projectStatus}
                 </Text>
-                {isUserProject && (
-                  <Text
-                    size="1"
-                    style={{
-                      backgroundColor: 'var(--blue-3)',
-                      color: 'var(--blue-11)',
-                      padding: '2px 6px',
-                      borderRadius: '4px',
-                      fontWeight: '500',
-                    }}
-                  >
-                    Your Project
-                  </Text>
-                )}
-                {isUserProject && !isPublic && (
-                  <Text
-                    size="1"
-                    style={{
-                      backgroundColor: 'var(--orange-3)',
-                      color: 'var(--orange-11)',
-                      padding: '2px 6px',
-                      borderRadius: '4px',
-                      fontWeight: '500',
-                    }}
-                  >
-                    Private
-                  </Text>
-                )}
+                <Text size="1" color="gray">
+                  Updated:{' '}
+                  {project.updated_at
+                    ? new Date(project.updated_at).toLocaleDateString('en-GB')
+                    : 'Unknown date'}
+                </Text>
               </Flex>
             </Box>
-          </Flex>
-
-          <Text
-            size="2"
-            mb="3"
-            style={{
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-            }}
-          >
-            {projectDescription}
-          </Text>
-
-          <Flex justify="between" align="center">
-            <Text size="1" color="gray">
-              Status: {projectStatus}
-            </Text>
-            <Text size="1" color="gray">
-              {project.created_at
-                ? new Date(project.created_at).toLocaleDateString('en-GB')
-                : 'Unknown date'}
-            </Text>
           </Flex>
         </Box>
       </Card>

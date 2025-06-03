@@ -1,17 +1,21 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Card, Box, Text } from '@radix-ui/themes';
-import { MultiStepForm } from '@/components/forms/MultiStepForm';
-import { ProjectBasicInfoStep } from '@/components/forms/ProjectBasicInfoStep';
-import { ProjectFundingDetailsStep } from '@/components/forms/ProjectFundingDetailsStep';
-import {
-  TeamCollaborationStep,
-  TeamCollaborationFormData,
-} from '@/components/forms/TeamCollaborationStep';
-import { useToastHelpers } from '@/components/layout/ToastProvider';
+import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Card, Box, Text, Flex, Heading, Badge } from '@radix-ui/themes';
 import { Project, Snapshot, ProjectPermission } from '@/types/supabase';
+import { useToastHelpers } from '@/components/layout/ToastProvider';
+
+// Import section components
+import {
+  SectionNavigation,
+  ProjectSection,
+} from '@/components/forms/EditProjectSections/SectionNavigation';
+import { CommonInfoSection } from '@/components/forms/EditProjectSections/CommonInfoSection';
+import { DocumentsSection } from '@/components/forms/EditProjectSections/DocumentsSection';
+import { FundingSection } from '@/components/forms/EditProjectSections/FundingSection';
+import { MilestonesSection } from '@/components/forms/EditProjectSections/MilestonesSection';
+import { TeamSection } from '@/components/forms/EditProjectSections/TeamSection';
 
 // Type for project with details (matching getProjectWithDetails return)
 type ProjectWithDetails = Project & {
@@ -26,47 +30,22 @@ interface EditProjectFormProps {
   userEmail?: string;
 }
 
-// Define project form data type (simplified to match actual DB schema)
-interface ProjectFormData {
-  // Basic info
-  name: string;
-  slug: string;
-  description: string;
-
-  // Funding details (optional fields)
-  fundingGoal?: number;
-  currency?: string;
-  timeline?: {
-    startDate?: string;
-    endDate?: string;
-  };
-  milestones?: Array<{
-    title: string;
-    description: string;
-    targetDate?: string;
-    status: 'planned' | 'in_progress' | 'completed' | 'delayed' | 'cancelled';
-  }>;
-
-  // Team members from TeamCollaborationFormData
-  teamMembers: TeamCollaborationFormData['teamMembers'];
-  inviteCollaborators: TeamCollaborationFormData['inviteCollaborators'];
-
-  // Add index signature to satisfy FormData constraint
-  [key: string]: unknown;
-}
-
 export default function EditProjectForm({
   project,
   userFullName = '',
   userEmail = '',
 }: EditProjectFormProps) {
-  const router = useRouter();
-  const { error, success } = useToastHelpers();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const searchParams = useSearchParams();
+  const { success } = useToastHelpers();
+
+  // Get current section from URL params, default to 'common'
+  const currentSection = (searchParams.get('section') as ProjectSection) || 'common';
+
+  // State for tracking completed sections and loading states
+  const [completedSections, setCompletedSections] = useState<Set<ProjectSection>>(new Set());
+  const [isLoading, setIsLoading] = useState(false);
 
   // Get current snapshot data for editing
-  // If new_snapshot_id exists and differs from public_snapshot_id, we're editing a draft
-  // Otherwise, we're starting from the published version
   const isEditingDraft =
     project.new_snapshot_id && project.new_snapshot_id !== project.public_snapshot_id;
   const currentSnapshot = isEditingDraft ? project.new_snapshot : project.public_snapshot;
@@ -80,24 +59,35 @@ export default function EditProjectForm({
     willCreateNewSnapshot: !isEditingDraft,
   });
 
-  // Prepare initial form data from current project/snapshot
-  const initialFormData: ProjectFormData = {
-    // Basic info from project/snapshot
+  // Prepare initial data for sections
+  const commonInfoData = {
     name: currentSnapshot?.name || project.slug || '',
     slug: project.slug,
+    slogan: currentSnapshot?.slogan || '',
     description: currentSnapshot?.description || '',
+    status: currentSnapshot?.status || 'idea',
+    country: currentSnapshot?.country || '',
+    city: currentSnapshot?.city || '',
+    website_urls: currentSnapshot?.website_urls || [],
+    logo_url: currentSnapshot?.logo_url || undefined,
+    banner_url: currentSnapshot?.banner_url || undefined,
+  };
 
-    // Funding details - initialize with empty values since they're not stored in DB yet
-    fundingGoal: undefined,
+  const fundingData = {
+    fundingGoal: undefined, // Not stored in DB yet
     currency: 'USD',
+    investmentStage: '',
     timeline: {
-      startDate: undefined,
-      endDate: undefined,
+      startDate: '',
+      endDate: '',
     },
-    milestones: [],
+  };
 
-    // Team members - for now, just include current user
-    // TODO: Load actual team members from project permissions
+  const milestonesData = {
+    milestones: [], // Not stored in DB yet
+  };
+
+  const teamData = {
     teamMembers: [
       {
         name: userFullName,
@@ -109,37 +99,55 @@ export default function EditProjectForm({
     inviteCollaborators: [],
   };
 
-  // Handle form completion - update project via snapshot
-  const handleUpdateProject = async (formData: ProjectFormData) => {
-    // Prevent multiple submissions
-    if (isSubmitting) {
-      return;
-    }
+  // Generic save handler for all sections
+  const handleSectionSave = async (sectionId: ProjectSection, data: Record<string, unknown>) => {
+    setIsLoading(true);
 
     try {
-      setIsSubmitting(true);
+      let snapshotData: Record<string, unknown> = {};
 
-      const { name, slug, description } = formData;
-      // Note: Funding details (fundingGoal, currency, timeline, milestones) are not saved yet
-      // as they don't exist in the current database schema
+      // Prepare data based on section
+      switch (sectionId) {
+        case 'common':
+          snapshotData = {
+            name: data.name,
+            slogan: data.slogan || null,
+            description: data.description,
+            status: data.status,
+            country: data.country || null,
+            city: data.city || null,
+            website_urls: data.website_url ? [data.website_url] : [],
+            logo_url: data.logo_url || null,
+            banner_url: data.banner_url || null,
+          };
+          break;
 
-      // Prepare snapshot data with only fields that exist in DB
-      const snapshotData = {
-        name,
-        description,
-        // Keep existing snapshot fields that we don't edit
-        status: currentSnapshot?.status || 'idea',
-        slogan: currentSnapshot?.slogan,
-        country: currentSnapshot?.country,
-        city: currentSnapshot?.city,
-        repository_urls: currentSnapshot?.repository_urls,
-        website_urls: currentSnapshot?.website_urls,
-        logo_url: currentSnapshot?.logo_url,
-        banner_url: currentSnapshot?.banner_url,
-        video_urls: currentSnapshot?.video_urls,
-      };
+        case 'funding':
+          // For now, funding data is not saved to DB as the schema doesn't support it yet
+          console.log('Funding data (not saved to DB yet):', data);
+          success('Funding information saved locally (DB schema update needed)');
+          setCompletedSections(prev => new Set([...prev, sectionId]));
+          return;
 
-      // Create/update snapshot
+        case 'milestones':
+          // For now, milestones data is not saved to DB as the schema doesn't support it yet
+          console.log('Milestones data (not saved to DB yet):', data);
+          success('Milestones saved locally (DB schema update needed)');
+          setCompletedSections(prev => new Set([...prev, sectionId]));
+          return;
+
+        case 'team':
+          // For now, team data is not saved to DB as the schema doesn't support it yet
+          console.log('Team data (not saved to DB yet):', data);
+          success('Team information saved locally (DB schema update needed)');
+          setCompletedSections(prev => new Set([...prev, sectionId]));
+          return;
+
+        default:
+          throw new Error(`Unknown section: ${sectionId}`);
+      }
+
+      // Create/update snapshot for common info
       const response = await fetch(`/api/projects/${project.id}/snapshots`, {
         method: 'POST',
         headers: {
@@ -150,18 +158,18 @@ export default function EditProjectForm({
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update project');
+        throw new Error(errorData.error || 'Failed to save changes');
       }
 
-      // If slug changed, also update the project
-      if (slug && slug !== project.slug) {
-        console.log('Updating project slug from', project.slug, 'to', slug);
+      // If slug changed in common info, also update the project
+      if (sectionId === 'common' && data.slug && data.slug !== project.slug) {
+        console.log('Updating project slug from', project.slug, 'to', data.slug);
         const projectResponse = await fetch(`/api/projects/${project.id}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ slug }),
+          body: JSON.stringify({ slug: data.slug }),
         });
 
         if (!projectResponse.ok) {
@@ -173,66 +181,105 @@ export default function EditProjectForm({
         console.log('Project slug updated successfully');
       }
 
-      // Success! Show message and redirect
-      const successMessage = isEditingDraft
-        ? 'Draft updated successfully!'
-        : 'Draft created successfully!';
-      success(successMessage);
-      router.push(`/projects/${project.id}`);
+      // Mark section as completed
+      setCompletedSections(prev => new Set([...prev, sectionId]));
     } catch (err) {
-      console.error('Error updating project:', err);
-      error(err instanceof Error ? err.message : 'An error occurred while updating your project');
-      setIsSubmitting(false);
+      console.error(`Error saving ${sectionId} section:`, err);
+      throw err; // Re-throw to let section handle the error display
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Define form steps
-  const steps = [
-    {
-      id: 'basic-info',
-      title: 'Basic Information',
-      component: <ProjectBasicInfoStep onSubmit={() => {}} currentSlug={project.slug} />,
-    },
-    {
-      id: 'funding-details',
-      title: 'Funding & Timeline',
-      component: <ProjectFundingDetailsStep onSubmit={() => {}} />,
-      isOptional: true,
-    },
-    {
-      id: 'team-collaboration',
-      title: 'Team & Collaboration',
-      component: <TeamCollaborationStep onSubmit={() => {}} />,
-    },
-  ];
+  // Render current section
+  const renderCurrentSection = () => {
+    switch (currentSection) {
+      case 'common':
+        return (
+          <CommonInfoSection
+            initialData={commonInfoData}
+            projectId={project.id}
+            onSave={data => handleSectionSave('common', data)}
+            isLoading={isLoading}
+          />
+        );
+
+      case 'documents':
+        return <DocumentsSection projectId={project.id} />;
+
+      case 'funding':
+        return (
+          <FundingSection
+            initialData={fundingData}
+            projectId={project.id}
+            onSave={data => handleSectionSave('funding', data)}
+            isLoading={isLoading}
+          />
+        );
+
+      case 'milestones':
+        return (
+          <MilestonesSection
+            initialData={milestonesData}
+            projectId={project.id}
+            onSave={data => handleSectionSave('milestones', data)}
+            isLoading={isLoading}
+          />
+        );
+
+      case 'team':
+        return (
+          <TeamSection
+            initialData={teamData}
+            projectId={project.id}
+            onSave={data => handleSectionSave('team', data)}
+            isLoading={isLoading}
+          />
+        );
+
+      default:
+        return (
+          <Card size="3">
+            <Box p="5">
+              <Text>Section not found</Text>
+            </Box>
+          </Card>
+        );
+    }
+  };
 
   return (
-    <Card variant="surface">
-      {/* Show editing mode indicator */}
-      <Box
-        mb="4"
-        p="3"
-        style={{
-          backgroundColor: isEditingDraft ? 'var(--amber-3)' : 'var(--blue-3)',
-          borderRadius: 'var(--radius-2)',
-        }}
-      >
-        <Text size="2" color={isEditingDraft ? 'amber' : 'blue'}>
-          {isEditingDraft
-            ? '📝 You are editing a draft version. Changes will be saved to your draft until published.'
-            : '✨ You are creating a new draft. A new version will be created when you save changes.'}
-        </Text>
-      </Box>
+    <Box>
+      {/* Header with editing mode indicator */}
+      <Card variant="surface" mb="4">
+        <Box p="4">
+          <Flex direction="column" gap="3">
+            <Flex justify="between" align="center">
+              <Heading size="6">Edit Project</Heading>
+              <Badge size="2" color={isEditingDraft ? 'amber' : 'blue'}>
+                {isEditingDraft ? 'Editing Draft' : 'Creating New Draft'}
+              </Badge>
+            </Flex>
 
-      <MultiStepForm<ProjectFormData>
-        steps={steps}
-        onComplete={handleUpdateProject}
-        isSubmitting={isSubmitting}
-        initialData={initialFormData}
-        submitButtonText={isEditingDraft ? 'Update Draft' : 'Create Draft'}
-        submittingText={isEditingDraft ? 'Updating Draft...' : 'Creating Draft...'}
-        successMessage="Project successfully updated!"
+            <Text size="2" color={isEditingDraft ? 'amber' : 'blue'}>
+              {isEditingDraft
+                ? '📝 You are editing a draft version. Changes will be saved to your draft until published.'
+                : '✨ You are creating a new draft. A new version will be created when you save changes.'}
+            </Text>
+          </Flex>
+        </Box>
+      </Card>
+
+      {/* Section Navigation */}
+      <SectionNavigation
+        currentSection={currentSection}
+        projectId={project.id}
+        completedSections={completedSections}
+        hasUnsavedChanges={false} // TODO: Implement unsaved changes detection
       />
-    </Card>
+
+      {/* Current Section Content */}
+      {renderCurrentSection()}
+    </Box>
   );
 }

@@ -1,9 +1,9 @@
-import { getProjectWithDetails } from '@/lib/supabase/helpers';
 import { notFound } from 'next/navigation';
+import { ExclamationTriangleIcon, EyeClosedIcon } from '@radix-ui/react-icons';
+import { getProjectWithDetails } from '@/lib/supabase/helpers';
 import { getCurrentUser } from '@/lib/supabase/client';
 import { checkUserProjectRole, getProjectCoreStatus } from '@/lib/supabase/helpers';
-import { ProjectDetails } from '@/components/projects/ProjectDetails';
-import { ExclamationTriangleIcon, EyeClosedIcon } from '@radix-ui/react-icons';
+import { ProjectContent } from '@/components/projects/ProjectContent';
 
 export const dynamic = 'force-dynamic';
 
@@ -129,7 +129,7 @@ export default async function ProjectPage({ params: paramsPromise }: ProjectPage
   }
 
   return (
-    <ProjectDetails
+    <ProjectContent
       project={project}
       isAuthenticated={!!user}
       userId={user?.id}

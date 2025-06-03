@@ -659,6 +659,82 @@ COMMENT ON FUNCTION public.publish_project_draft(UUID, UUID) IS 'Publishes a pro
 -- Removed old policy for projects: DROP POLICY IF EXISTS "Users with permissions can view projects" ON public.projects;
 -- This was replaced by the combination of "Public projects are viewable by everyone" and "Owners can view their non-archived projects".
 
+-- ==========================================
+-- Storage Policies for project-files bucket
+-- ==========================================
+-- Note: These policies should be created in Supabase Dashboard > Storage > Policies
+-- or via SQL Editor, not through direct INSERT into storage.policies table
+
+-- Policy for viewing project files
+CREATE POLICY "Users can view project files based on project permissions"
+ON storage.objects FOR SELECT
+USING (
+  bucket_id = 'project-files' AND (
+    -- Public projects - everyone can view
+    EXISTS (
+      SELECT 1 FROM public.projects p 
+      WHERE p.id::text = (storage.foldername(name))[1] 
+      AND p.is_public = true 
+      AND p.is_archived = false
+    )
+    OR
+    -- Users with project permissions
+    EXISTS (
+      SELECT 1 FROM public.project_permissions pp 
+      WHERE pp.project_id::text = (storage.foldername(name))[1] 
+      AND pp.user_id = auth.uid()
+    )
+  )
+);
+
+-- Policy for uploading project files
+CREATE POLICY "Users with edit permissions can upload project files"
+ON storage.objects FOR INSERT
+WITH CHECK (
+  bucket_id = 'project-files' AND
+  EXISTS (
+    SELECT 1 FROM public.project_permissions pp 
+    WHERE pp.project_id::text = (storage.foldername(name))[1] 
+    AND pp.user_id = auth.uid()
+    AND pp.role IN ('editor', 'admin', 'owner')
+  )
+);
+
+-- Policy for updating project files
+CREATE POLICY "Users with edit permissions can update project files"
+ON storage.objects FOR UPDATE
+USING (
+  bucket_id = 'project-files' AND
+  EXISTS (
+    SELECT 1 FROM public.project_permissions pp 
+    WHERE pp.project_id::text = (storage.foldername(name))[1] 
+    AND pp.user_id = auth.uid()
+    AND pp.role IN ('editor', 'admin', 'owner')
+  )
+)
+WITH CHECK (
+  bucket_id = 'project-files' AND
+  EXISTS (
+    SELECT 1 FROM public.project_permissions pp 
+    WHERE pp.project_id::text = (storage.foldername(name))[1] 
+    AND pp.user_id = auth.uid()
+    AND pp.role IN ('editor', 'admin', 'owner')
+  )
+);
+
+-- Policy for deleting project files
+CREATE POLICY "Users with edit permissions can delete project files"
+ON storage.objects FOR DELETE
+USING (
+  bucket_id = 'project-files' AND
+  EXISTS (
+    SELECT 1 FROM public.project_permissions pp 
+    WHERE pp.project_id::text = (storage.foldername(name))[1] 
+    AND pp.user_id = auth.uid()
+    AND pp.role IN ('editor', 'admin', 'owner')
+  )
+);
+
 -- Notes on ENUMs:
 -- To add a new value to an ENUM later: ALTER TYPE project_status_enum ADD VALUE 'new_status_value';
 -- (This needs to be done manually or via a separate migration script if the script is re-runnable)

@@ -1,6 +1,5 @@
 'use client';
 
-import React, { useState, FormEvent } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -15,7 +14,6 @@ import {
   Button,
   Separator,
   AspectRatio,
-  Spinner,
   Badge,
   Section,
 } from '@radix-ui/themes';
@@ -30,22 +28,13 @@ import {
   SizeIcon,
   CheckCircledIcon,
 } from '@radix-ui/react-icons';
-import { UserData, Profile } from '@/types/auth';
-import { FileUploadArea } from '@/components/forms/file-upload-area';
-import { MAX_AVATAR_SIZE_BYTES, MAX_COVER_SIZE_BYTES } from '@/lib/file-constants';
-import { useToastHelpers } from '@/components/layout/ToastProvider';
+import { UserData } from '@/types/auth';
 
 interface ProfileContentProps {
   userData: UserData | null;
 }
 
-export function ProfileContent({ userData: initialUserData }: ProfileContentProps) {
-  const [userData, setUserData] = useState<UserData | null>(initialUserData);
-  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
-  const [selectedCoverFile, setSelectedCoverFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const { success: toastSuccess, error: toastError } = useToastHelpers();
-
+export function ProfileContent({ userData }: ProfileContentProps) {
   if (!userData) {
     return (
       <Container size="3" py="9">
@@ -70,73 +59,6 @@ export function ProfileContent({ userData: initialUserData }: ProfileContentProp
   }
 
   const { user, profile } = userData;
-
-  const handleFileSelected = (file: File | null, type: 'avatar' | 'cover') => {
-    if (type === 'avatar') {
-      setSelectedAvatarFile(file);
-    } else {
-      setSelectedCoverFile(file);
-    }
-  };
-
-  const handleImageUploads = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!selectedAvatarFile && !selectedCoverFile) {
-      toastError('No new images selected to upload.');
-      return;
-    }
-
-    setIsUploading(true);
-    let anImageWasUploaded = false;
-
-    try {
-      if (selectedAvatarFile) {
-        const formData = new FormData();
-        formData.append('file', selectedAvatarFile);
-        formData.append('uploadType', 'avatar');
-
-        const response = await fetch('/api/profile/image-upload', {
-          method: 'POST',
-          body: formData,
-        });
-
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'Failed to upload avatar.');
-        setUserData(prev => (prev ? { ...prev, profile: result.profile as Profile } : null));
-        setSelectedAvatarFile(null);
-        anImageWasUploaded = true;
-      }
-
-      if (selectedCoverFile) {
-        const formData = new FormData();
-        formData.append('file', selectedCoverFile);
-        formData.append('uploadType', 'cover');
-
-        const response = await fetch('/api/profile/image-upload', {
-          method: 'POST',
-          body: formData,
-        });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'Failed to upload cover image.');
-        setUserData(prev => (prev ? { ...prev, profile: result.profile as Profile } : null));
-        setSelectedCoverFile(null);
-        anImageWasUploaded = true;
-      }
-
-      if (anImageWasUploaded) {
-        toastSuccess('Image(s) uploaded successfully!');
-      }
-    } catch (error: unknown) {
-      console.error('Upload error:', error);
-      if (error instanceof Error) {
-        toastError(error.message);
-      } else {
-        toastError('An unexpected error occurred during upload.');
-      }
-    } finally {
-      setIsUploading(false);
-    }
-  };
 
   // Format date to be more readable
   const formatDate = (dateString: string) => {
@@ -364,44 +286,6 @@ export function ProfileContent({ userData: initialUserData }: ProfileContentProp
               </Card>
             </Section>
           )}
-
-          {/* Image Upload Controls */}
-          <Card>
-            <Heading size="5" mb="4">
-              Update Profile Images
-            </Heading>
-            <form onSubmit={handleImageUploads}>
-              <Grid columns={{ initial: '1', sm: '2' }} gap="4">
-                <FileUploadArea
-                  label="Avatar"
-                  currentImageUrl={profile?.avatar_url}
-                  onFileSelect={file => handleFileSelected(file, 'avatar')}
-                  uploadType="avatar"
-                  maxFileSizeMB={MAX_AVATAR_SIZE_BYTES / 1024 / 1024}
-                  aspectRatio="1 / 1"
-                  fallbackText={profile?.full_name?.[0] || user.email?.[0] || '?'}
-                />
-
-                <FileUploadArea
-                  label="Cover Image"
-                  currentImageUrl={profile?.cover_url}
-                  onFileSelect={file => handleFileSelected(file, 'cover')}
-                  uploadType="cover"
-                  maxFileSizeMB={MAX_COVER_SIZE_BYTES / 1024 / 1024}
-                  aspectRatio="16 / 9"
-                />
-              </Grid>
-
-              {(selectedAvatarFile || selectedCoverFile) && (
-                <Flex justify="end" mt="4">
-                  <Button type="submit" size="2" color="green" disabled={isUploading}>
-                    {isUploading && <Spinner size="2" mr="2" />}
-                    Save Image Changes
-                  </Button>
-                </Flex>
-              )}
-            </form>
-          </Card>
         </Box>
       </Grid>
     </Container>

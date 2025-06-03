@@ -7,3 +7,5 @@ export const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'i
 
 export const AVATAR_BUCKET_NAME = 'avatars';
 export const COVER_BUCKET_NAME = 'profile-covers';
+
+export const PROJECT_FILES_BUCKET_NAME = 'project-files';

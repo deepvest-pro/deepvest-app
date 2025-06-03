@@ -70,6 +70,8 @@ export type ProjectStatus =
 // Permission roles
 export type ProjectRole = 'viewer' | 'editor' | 'admin' | 'owner';
 
+export type MilestoneStatus = 'planned' | 'in_progress' | 'completed' | 'delayed' | 'cancelled';
+
 // Project fields without common fields
 type ProjectFields = {
   slug: string;
