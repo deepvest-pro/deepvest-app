@@ -16,7 +16,6 @@ export async function getSafeCookies() {
 export async function logCookies() {
   const cookieStore = await cookies();
   const allCookies = cookieStore.getAll();
-  console.log('All cookies:', allCookies);
   return allCookies;
 }
 

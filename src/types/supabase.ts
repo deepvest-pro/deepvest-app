@@ -2,7 +2,7 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 // Utility types to avoid duplication
 type Timestamp = string;
-type UUID = string;
+export type UUID = string;
 
 // Helper type for table definitions
 type TableDefinition<Row, Insert = Row, Update = Partial<Row>> = {
@@ -37,6 +37,12 @@ type UserProfileFields = {
 
 // Define user profile row type (all fields required)
 type UserProfileRow = CommonTableFields & UserProfileFields;
+
+export type ExpandedUser = {
+  id: UUID;
+  email?: string;
+  user_profiles: UserProfileRow | null;
+};
 
 // Define user profile insert type (only id is required, others optional)
 type UserProfileInsert = Pick<UserProfileRow, 'id'> &
@@ -100,7 +106,7 @@ type SnapshotFields = {
   logo_url: string | null;
   banner_url: string | null;
   video_urls: string[] | null;
-  author_id: UUID;
+  author_id: UUID | ExpandedUser;
   is_locked: boolean;
 };
 
@@ -120,7 +126,7 @@ type SnapshotUpdate = Partial<SnapshotRow>;
 // Project permissions fields
 type ProjectPermissionFields = {
   project_id: UUID;
-  user_id: UUID;
+  user_id: UUID | ExpandedUser;
   role: ProjectRole;
 };
 
@@ -348,7 +354,14 @@ export type ProjectWithSnapshot = Project & {
   permissions?: ProjectPermission[];
 };
 
-// Snapshot with related data
+// Type for a snapshot that definitely has an expanded author (if author exists)
+// This replaces the older SnapshotWithAuthor which might be too simple
+export type SnapshotWithExpandedAuthor = Omit<Snapshot, 'author_id'> & {
+  author_id: ExpandedUser | null; // Author is expanded or null if no author_id was set
+};
+
+// Older SnapshotWithAuthor - can be deprecated or updated if still used elsewhere
+// For now, let's keep it but be aware of SnapshotWithExpandedAuthor as the more precise type
 export type SnapshotWithAuthor = Snapshot & {
   author?: UserProfile | null;
 };

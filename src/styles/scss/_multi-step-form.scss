@@ -1,0 +1,74 @@
+@use '../variables' as var;
+@use '../mixins' as mix;
+
+// Styles for multi-step form
+.multi-step-form {
+  position: relative;
+  width: 100%;
+
+  // Step indicators
+  .step-indicator {
+    position: relative;
+    flex: 1;
+    max-width: 150px;
+    transition: all 0.3s ease;
+    padding: 0.5rem;
+    border-radius: 6px;
+
+    &:hover {
+      background-color: rgba(0, 0, 0, 0.03);
+    }
+
+    &.active {
+      background-color: rgba(0, 0, 0, 0.05);
+    }
+  }
+
+  // Connecting lines between steps
+  @media (min-width: 600px) {
+    .step-indicator {
+      &:not(:last-child)::after {
+        content: '';
+        position: absolute;
+        top: 16px;
+        right: -10%;
+        width: 20%;
+        height: 2px;
+        background-color: var(--gray-6);
+        z-index: 0;
+      }
+
+      &.completed:not(:last-child)::after {
+        background-color: var(--green-9);
+      }
+    }
+  }
+
+  // Step content
+  .step-content {
+    margin-bottom: 1.5rem;
+    transition: all 0.3s ease;
+    min-height: 300px;
+  }
+
+  // Form styles - specific to each step
+  .basic-info-form,
+  .funding-details-form,
+  .team-collaboration-form {
+    width: 100%;
+  }
+
+  // Ensure forms have proper spacing
+  form {
+    > *:not(:last-child) {
+      margin-bottom: 1rem;
+    }
+  }
+
+  // Responsive adjustments
+  @include mix.mobile {
+    .step-indicator {
+      max-width: none;
+    }
+  }
+}

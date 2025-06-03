@@ -1,11 +1,20 @@
-import type { Project, ProjectRole, Snapshot } from '@/types/supabase';
-import { createServerSupabaseClient } from './client';
+import type {
+  Project,
+  ProjectPermission,
+  ProjectRole,
+  Snapshot,
+  ExpandedUser,
+  UserProfile,
+  UUID,
+} from '@/types/supabase';
+import { createServerSupabaseClient, getCurrentUser } from './client';
 
 /**
  * Fetches a project by ID with permissions and snapshots
  */
 export async function getProjectWithDetails(projectId: string) {
   const supabase = await createServerSupabaseClient();
+  const user = await getCurrentUser();
 
   // Fetch the project
   const { data: project, error: projectError } = await supabase
@@ -18,44 +27,172 @@ export async function getProjectWithDetails(projectId: string) {
     return { error: projectError?.message || 'Project not found', data: null };
   }
 
-  // Fetch permissions
-  const { data: permissions, error: permissionsError } = await supabase
-    .from('project_permissions')
-    .select('*, user_id(id, full_name, nickname, avatar_url)')
-    .eq('project_id', projectId);
+  let permissions: ProjectPermission[] = [];
 
-  if (permissionsError) {
-    return { error: permissionsError.message, data: null };
+  if (user) {
+    // For authenticated users, fetch raw permissions first, then expand user_id manually
+    const { data: rawPermissions, error: rawPermissionsError } = await supabase
+      .from('project_permissions')
+      .select('*') // Select raw data, user_id will be UUID
+      .eq('project_id', projectId);
+
+    if (rawPermissionsError) {
+      console.error(
+        `[getProjectWithDetails] Auth user: Failed to fetch raw permissions for project ${projectId}: ${rawPermissionsError.message}`,
+      );
+      return { error: rawPermissionsError.message, data: null };
+    }
+
+    if (rawPermissions) {
+      const processedPermissions: ProjectPermission[] = [];
+      for (const rawPerm of rawPermissions) {
+        let expandedUser: ExpandedUser | null = null;
+        const userId = rawPerm.user_id as UUID; // Cast to UUID, as it's raw from DB
+
+        if (userId) {
+          // Attempt to fetch the user's profile
+          const { data: profile, error: profileError } = await supabase
+            .from('user_profiles')
+            .select('id, full_name, nickname, avatar_url')
+            .eq('id', userId)
+            .single();
+
+          if (profileError) {
+            console.warn(
+              `[getProjectWithDetails] Auth user: Failed to fetch profile for user ${userId} in project ${projectId}: ${profileError.message}`,
+            );
+            // If profile fetch fails, expandedUser remains null, and later userId (UUID) will be used.
+          } else if (profile) {
+            expandedUser = {
+              id: profile.id,
+              email: undefined, // Email is not fetched here to avoid RLS issues on auth.users
+              user_profiles: profile as UserProfile,
+            };
+          }
+        }
+        // If expandedUser is still null (profile fetch failed or no userId), use userId (UUID).
+        // Otherwise, use the constructed expandedUser object.
+        processedPermissions.push({ ...rawPerm, user_id: expandedUser || userId });
+      }
+      permissions = processedPermissions;
+    } else {
+      permissions = [];
+    }
   }
 
-  // Fetch public snapshot if exists
+  // Helper function to fetch and construct snapshot with expanded author
+  async function fetchAndProcessSnapshot(snapshotId: UUID): Promise<Snapshot | null> {
+    let snapshotData: Snapshot | null = null;
+
+    if (user) {
+      // Authenticated user: try relational select first
+      const { data: relationalData, error: relationalError } = await supabase
+        .from('snapshots')
+        .select('*, author_id(id, email, user_profiles(id, full_name, nickname, avatar_url))')
+        .eq('id', snapshotId)
+        .single();
+
+      if (!relationalError && relationalData) {
+        // Cast to Snapshot, assuming the select expands author_id to ExpandedUser
+        snapshotData = relationalData as Snapshot;
+      } else {
+        if (relationalError) {
+          console.warn(
+            `[getProjectWithDetails] Auth user: Relational select for snapshot ${snapshotId} author failed: ${relationalError.message}. Falling back.`,
+          );
+        }
+        // Fallback for authenticated user or if relational select somehow fails to expand
+        const { data: rawData, error: rawError } = await supabase
+          .from('snapshots')
+          .select('*')
+          .eq('id', snapshotId)
+          .single();
+        if (rawError || !rawData) return null;
+
+        // rawData.author_id is UUID here. We need to fetch profile and construct ExpandedUser.
+        let authorInfo: ExpandedUser | null = null;
+        if (rawData.author_id) {
+          // author_id is UUID from rawData
+          const { data: profile, error: profileError } = await supabase
+            .from('user_profiles')
+            .select('id, full_name, nickname, avatar_url') // Select only needed fields
+            .eq('id', rawData.author_id) // Use the UUID
+            .single();
+          if (!profileError && profile) {
+            authorInfo = {
+              id: profile.id,
+              email: undefined,
+              /* email might be available if we query auth.users, but sticking to profiles for now */ user_profiles:
+                profile as UserProfile,
+            };
+          } else if (profileError) {
+            console.warn(
+              `[getProjectWithDetails] Auth user (fallback): Failed to fetch profile for author ${rawData.author_id}: ${profileError.message}`,
+            );
+          }
+        }
+        snapshotData = { ...rawData, author_id: authorInfo || rawData.author_id }; // Assign constructed author or keep UUID if profile fetch failed
+      }
+    } else {
+      // Guest user: fetch snapshot raw, then profile separately
+      const { data: rawData, error: rawError } = await supabase
+        .from('snapshots')
+        .select('*')
+        .eq('id', snapshotId)
+        .single();
+
+      if (rawError || !rawData) {
+        console.warn(
+          `[FAPS] Guest: Failed to fetch raw snapshot ${snapshotId}. Error: ${rawError?.message}. RawData: ${JSON.stringify(rawData)}`,
+        );
+        return null;
+      }
+
+      let authorInfo: ExpandedUser | null = null;
+      if (rawData.author_id) {
+        // author_id is UUID
+        const { data: profile, error: profileError } = await supabase
+          .from('user_profiles')
+          .select('id, full_name, nickname, avatar_url')
+          .eq('id', rawData.author_id) // Use the UUID
+          .single();
+
+        if (!profileError && profile) {
+          authorInfo = { id: profile.id, email: undefined, user_profiles: profile as UserProfile };
+        } else if (profileError) {
+          console.warn(
+            `[getProjectWithDetails] Guest: Failed to fetch profile for author ${rawData.author_id}: ${profileError.message}`,
+          );
+        }
+      }
+      // Assign the constructed ExpandedUser to author_id, or keep the original UUID if profile fetch failed
+      snapshotData = { ...rawData, author_id: authorInfo || rawData.author_id };
+    }
+    return snapshotData;
+  }
+
   let publicSnapshot: Snapshot | null = null;
   if (project.public_snapshot_id) {
-    const { data: snapshot, error: snapshotError } = await supabase
-      .from('snapshots')
-      .select('*, author_id(id, full_name, nickname, avatar_url)')
-      .eq('id', project.public_snapshot_id)
-      .single();
-
-    if (snapshotError) {
-      return { error: snapshotError.message, data: null };
+    publicSnapshot = await fetchAndProcessSnapshot(project.public_snapshot_id);
+    if (!publicSnapshot) {
+      // If fetching public snapshot fails critically
+      console.error(
+        `[getProjectWithDetails] CRITICAL: Failed to fetch public snapshot ${project.public_snapshot_id}`,
+      );
+      // Decide if this should return an error for the whole project or continue with a null snapshot
+      // For now, let's allow project to load without a public snapshot if its fetch fails
     }
-    publicSnapshot = snapshot;
   }
 
-  // Fetch new snapshot if exists
   let newSnapshot: Snapshot | null = null;
   if (project.new_snapshot_id) {
-    const { data: snapshot, error: snapshotError } = await supabase
-      .from('snapshots')
-      .select('*, author_id(id, full_name, nickname, avatar_url)')
-      .eq('id', project.new_snapshot_id)
-      .single();
-
-    if (snapshotError) {
-      return { error: snapshotError.message, data: null };
+    newSnapshot = await fetchAndProcessSnapshot(project.new_snapshot_id);
+    if (!newSnapshot) {
+      console.warn(
+        `[getProjectWithDetails] WARN: Failed to fetch new snapshot ${project.new_snapshot_id}`,
+      );
+      // Allow project to load without a new snapshot if its fetch fails
     }
-    newSnapshot = snapshot;
   }
 
   return {
@@ -166,22 +303,74 @@ export async function createNewProject(
 }
 
 /**
- * Checks if a slug is available for use
+ * Check if a project slug is available
+ * @param slug The slug to check
+ * @returns Object containing available status and error if any
  */
-export async function isSlugAvailable(slug: string) {
-  const supabase = await createServerSupabaseClient();
+export async function isSlugAvailable(
+  slug: string,
+): Promise<{ available: boolean; error?: string }> {
+  try {
+    // Validate slug format
+    const slugRegex = /^[a-z0-9-]+$/;
+    if (!slugRegex.test(slug)) {
+      return {
+        available: false,
+        error: 'Slug can only contain lowercase letters, numbers, and hyphens',
+      };
+    }
 
-  const { data, error } = await supabase
-    .from('projects')
-    .select('slug')
-    .eq('slug', slug)
-    .maybeSingle();
+    if (slug.length < 3 || slug.length > 60) {
+      return {
+        available: false,
+        error: 'Slug must be between 3 and 60 characters long',
+      };
+    }
 
-  if (error) {
-    return { error: error.message, available: false };
+    // Check if slug is already taken
+    try {
+      const supabase = await createServerSupabaseClient();
+
+      // Verify supabase client was created successfully
+      if (!supabase) {
+        console.error('Failed to create Supabase client');
+        return {
+          available: false,
+          error: 'Database connection failed',
+        };
+      }
+
+      const { data, error } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('slug', slug)
+        .limit(1);
+
+      if (error) {
+        console.error('Error checking slug availability:', error);
+        return {
+          available: false,
+          error: 'An error occurred while checking slug availability',
+        };
+      }
+
+      return {
+        available: !data || data.length === 0,
+      };
+    } catch (clientError) {
+      console.error('Error creating or using Supabase client:', clientError);
+      return {
+        available: false,
+        error: 'Failed to connect to database',
+      };
+    }
+  } catch (error) {
+    console.error('Error in isSlugAvailable:', error);
+    return {
+      available: false,
+      error: 'An unexpected error occurred',
+    };
   }
-
-  return { error: null, available: !data };
 }
 
 /**

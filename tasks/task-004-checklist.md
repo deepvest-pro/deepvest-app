@@ -25,15 +25,10 @@
   - [x] Establish role hierarchy if applicable
   - [x] Set up default roles (owner, editor, viewer, etc.)
 - [x] Implement permissions management
-  - [x] Create API endpoints for role assignment
+  - [ ] Create API endpoints for role assignment
   - [x] Implement permission checking utilities
   - [ ] Add middleware for permission verification
   - [ ] Create helpers for conditional UI rendering
-- [ ] Build role assignment interface
-  - [ ] Design user invitation interface
-  - [ ] Create role selection component
-  - [ ] Implement user search/selection functionality
-  - [ ] Add ability to modify existing user roles
 
 ## Multi-step Project Creation Form
 
@@ -104,6 +99,35 @@
   - [ ] Add diff view for version comparison
   - [ ] Show toast notifications for version restoration
 
+## Helpers for Conditional UI Rendering
+
+- [ ] Create permission-based UI helpers
+  - [ ] Develop component for conditional rendering based on user role
+  - [ ] Implement permission checking hooks
+  - [ ] Create HOC for protected components
+  - [ ] Add context provider for permission state
+- [ ] Build utility functions
+  - [ ] Create role comparison helper
+  - [ ] Implement permission hierarchy resolver
+  - [ ] Add project status helpers
+  - [ ] Create toast notification utilities
+
+## Role Assignment Interface
+
+- [ ] Build role assignment interface
+  - [ ] Design user invitation interface
+  - [ ] Create role selection component
+  - [ ] Implement user search/selection functionality
+  - [ ] Add ability to modify existing user roles
+
+## Middleware for Permission Verification
+
+- [ ] Implement server-side middleware
+  - [ ] Create reusable middleware for route handlers
+  - [ ] Add role verification functions
+  - [ ] Implement cached permission checking
+  - [ ] Create error responses for unauthorized access
+
 ## Rich Text Editing
 
 - [ ] Select and integrate rich text editor
@@ -124,11 +148,11 @@
 
 ## API Endpoints and Integration
 
-- [ ] Implement project CRUD endpoints
-  - [ ] Create project creation endpoint
-  - [ ] Implement project retrieval with proper filtering
-  - [ ] Create update endpoint with validation
-  - [ ] Implement delete/archive functionality
+- [x] Implement project CRUD endpoints
+  - [x] Create project creation endpoint
+  - [x] Implement project retrieval with proper filtering
+  - [x] Create update endpoint with validation
+  - [x] Implement delete/archive functionality
 - [ ] Build draft mode endpoints
   - [ ] Create draft save/retrieve endpoints
   - [ ] Implement draft publishing functionality
@@ -142,11 +166,11 @@
 
 ## Basic Testing (MVP)
 
-- [ ] Verify core functionality works
-  - [ ] Test project creation flow
-  - [ ] Check basic editing functionality
-  - [ ] Verify permissions work for different users
-- [ ] Check for critical errors
-  - [ ] Ensure no console errors on main flows
-  - [ ] Verify forms submit correctly
-  - [ ] Test basic user interactions
+- [x] Verify core functionality works
+  - [x] Test project creation flow
+  - [x] Check basic editing functionality
+  - [x] Verify permissions work for different users
+- [x] Check for critical errors
+  - [x] Ensure no console errors on main flows
+  - [x] Verify forms submit correctly
+  - [x] Test basic user interactions
