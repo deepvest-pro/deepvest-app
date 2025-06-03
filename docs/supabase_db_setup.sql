@@ -291,6 +291,7 @@ CREATE TABLE IF NOT EXISTS public.snapshots (
   logo_url TEXT,
   banner_url TEXT,
   video_urls TEXT[],
+  contents UUID[], -- Array of ProjectContent IDs
   author_id UUID NOT NULL REFERENCES auth.users(id), -- Refers to the user who created/owns this snapshot version
   is_locked BOOLEAN NOT NULL DEFAULT false, -- Indicates if snapshot can be edited (locked after publish)
   UNIQUE(project_id, version)
@@ -298,6 +299,7 @@ CREATE TABLE IF NOT EXISTS public.snapshots (
 COMMENT ON TABLE public.snapshots IS 'Stores versioned snapshots of project data. Each snapshot represents a state of the project.';
 COMMENT ON COLUMN public.snapshots.author_id IS 'User who created this version of the snapshot.';
 COMMENT ON COLUMN public.snapshots.is_locked IS 'True if the snapshot is published and locked from further edits.';
+COMMENT ON COLUMN public.snapshots.contents IS 'Array of ProjectContent UUIDs associated with this snapshot.';
 
 -- Foreign key constraints from projects to snapshots (defined after snapshots table)
 ALTER TABLE public.projects DROP CONSTRAINT IF EXISTS fk_public_snapshot_id;
@@ -470,6 +472,155 @@ CREATE POLICY "Owners can manage permissions" ON public.project_permissions
     public.get_user_role_in_project(auth.uid(), project_permissions.project_id) = 'owner'
   );
 COMMENT ON POLICY "Owners can manage permissions" ON public.project_permissions IS 'Allows project owners to manage all aspects of permissions (add, update, remove users) for their projects.';
+
+
+-- ==========================================
+-- Project Content ENUM Type & Table
+-- Manages documents and content for projects.
+-- ==========================================
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'content_type_enum') THEN
+    CREATE TYPE content_type_enum AS ENUM (
+      'presentation', 'research', 'pitch_deck', 'whitepaper',
+      'video', 'audio', 'image', 'report', 'document',
+      'spreadsheet', 'table', 'chart', 'infographic',
+      'case_study', 'other'
+    );
+  END IF;
+END$$;
+
+CREATE TABLE IF NOT EXISTS public.project_content (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+  slug TEXT NOT NULL,
+  title TEXT NOT NULL,
+  content_type content_type_enum NOT NULL DEFAULT 'document',
+  content TEXT DEFAULT '',
+  description TEXT,
+  file_urls TEXT[] NOT NULL DEFAULT '{}',
+  author_id UUID NOT NULL REFERENCES auth.users(id),
+  is_public BOOLEAN NOT NULL DEFAULT false,
+  deleted_at TIMESTAMP WITH TIME ZONE,
+  UNIQUE(project_id, slug)
+);
+COMMENT ON TABLE public.project_content IS 'Stores documents and content files associated with projects.';
+COMMENT ON COLUMN public.project_content.slug IS 'URL-friendly identifier unique within the project.';
+COMMENT ON COLUMN public.project_content.file_urls IS 'Array of file URLs stored in Supabase Storage.';
+COMMENT ON COLUMN public.project_content.deleted_at IS 'Soft delete timestamp - content is hidden but not removed.';
+
+-- Create index for performance
+CREATE INDEX IF NOT EXISTS idx_project_content_project_id ON public.project_content(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_content_deleted_at ON public.project_content(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_project_content_author_id ON public.project_content(author_id);
+
+-- Trigger for project_content updated_at
+DROP TRIGGER IF EXISTS update_project_content_updated_at ON public.project_content;
+CREATE TRIGGER update_project_content_updated_at
+  BEFORE UPDATE ON public.project_content
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Enable RLS for project_content
+ALTER TABLE public.project_content ENABLE ROW LEVEL SECURITY;
+
+-- Policies for project_content
+DROP POLICY IF EXISTS "Public content is viewable by everyone" ON public.project_content;
+CREATE POLICY "Public content is viewable by everyone" ON public.project_content
+  FOR SELECT USING (
+    is_public = true 
+    AND deleted_at IS NULL
+    AND EXISTS (
+      SELECT 1 FROM public.projects p 
+      WHERE p.id = project_content.project_id 
+      AND p.is_public = true 
+      AND p.is_archived = false
+    )
+  );
+COMMENT ON POLICY "Public content is viewable by everyone" ON public.project_content IS 'Allows anyone to view public content from public, non-archived projects.';
+
+DROP POLICY IF EXISTS "Users with permissions can view project content" ON public.project_content;
+CREATE POLICY "Users with permissions can view project content" ON public.project_content
+  FOR SELECT USING (
+    deleted_at IS NULL
+    AND EXISTS (
+      SELECT 1 FROM public.project_permissions pp 
+      WHERE pp.project_id = project_content.project_id
+      AND pp.user_id = auth.uid()
+    )
+  );
+COMMENT ON POLICY "Users with permissions can view project content" ON public.project_content IS 'Allows users with project permissions to view all non-deleted content.';
+
+DROP POLICY IF EXISTS "Editors, Admins and Owners can create content" ON public.project_content;
+CREATE POLICY "Editors, Admins and Owners can create content" ON public.project_content
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.project_permissions pp 
+      WHERE pp.project_id = project_content.project_id
+      AND pp.user_id = auth.uid()
+      AND pp.role IN ('editor', 'admin', 'owner')
+    )
+    AND auth.uid() = project_content.author_id
+  );
+COMMENT ON POLICY "Editors, Admins and Owners can create content" ON public.project_content IS 'Allows project editors, admins, or owners to create content, ensuring they are the author.';
+
+DROP POLICY IF EXISTS "Authors and project admins can update content" ON public.project_content;
+CREATE POLICY "Authors and project admins can update content" ON public.project_content
+  FOR UPDATE USING (
+    deleted_at IS NULL
+    AND (
+      auth.uid() = project_content.author_id
+      OR EXISTS (
+        SELECT 1 FROM public.project_permissions pp 
+        WHERE pp.project_id = project_content.project_id
+        AND pp.user_id = auth.uid()
+        AND pp.role IN ('admin', 'owner')
+      )
+    )
+  );
+COMMENT ON POLICY "Authors and project admins can update content" ON public.project_content IS 'Allows content authors or project admins/owners to update content.';
+
+DROP POLICY IF EXISTS "Authors and project admins can soft delete content" ON public.project_content;
+CREATE POLICY "Authors and project admins can soft delete content" ON public.project_content
+  FOR UPDATE USING (
+    deleted_at IS NULL
+    AND (
+      auth.uid() = project_content.author_id
+      OR EXISTS (
+        SELECT 1 FROM public.project_permissions pp 
+        WHERE pp.project_id = project_content.project_id
+        AND pp.user_id = auth.uid()
+        AND pp.role IN ('admin', 'owner')
+      )
+    )
+  )
+  WITH CHECK (
+    -- Allow setting deleted_at or updating other fields
+    (deleted_at IS NOT NULL OR deleted_at IS NULL)
+  );
+COMMENT ON POLICY "Authors and project admins can soft delete content" ON public.project_content IS 'Allows content authors or project admins/owners to soft delete content by setting deleted_at.';
+
+-- Function to check if a content slug is available within a project
+CREATE OR REPLACE FUNCTION public.check_content_slug_availability(p_project_id UUID, p_slug TEXT, p_content_id UUID DEFAULT NULL)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  slug_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO slug_count 
+  FROM public.project_content 
+  WHERE project_id = p_project_id 
+    AND slug = p_slug 
+    AND deleted_at IS NULL
+    AND (p_content_id IS NULL OR id != p_content_id);
+  RETURN slug_count = 0;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.check_content_slug_availability(UUID, TEXT, UUID) TO authenticated;
+COMMENT ON FUNCTION public.check_content_slug_availability(UUID, TEXT, UUID) IS 'Checks if a content slug is available within a project, optionally excluding a specific content ID for updates.';
 
 
 -- ==========================================

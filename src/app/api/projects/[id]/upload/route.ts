@@ -2,14 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createSupabaseServerClient } from '@/lib/supabase/client';
 import {
-  MAX_AVATAR_SIZE_BYTES,
-  MAX_COVER_SIZE_BYTES,
-  ACCEPTED_IMAGE_TYPES,
+  getMaxFileSize,
+  getAcceptedFileTypes,
   PROJECT_FILES_BUCKET_NAME,
 } from '@/lib/file-constants';
 
 const uploadSchema = z.object({
-  uploadType: z.enum(['logo', 'banner']),
+  uploadType: z.enum(['logo', 'banner', 'document']),
   file: z.custom<File>(val => val instanceof File, 'File is required.'),
 });
 
@@ -49,7 +48,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
-    const uploadType = formData.get('uploadType') as 'logo' | 'banner' | null;
+    const uploadType = formData.get('uploadType') as 'logo' | 'banner' | 'document' | null;
 
     if (!file || !uploadType) {
       return NextResponse.json({ error: 'File and uploadType are required.' }, { status: 400 });
@@ -66,16 +65,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const { file: validatedFile, uploadType: validatedUploadType } = validationResult.data;
 
+    // Get accepted file types and max size for this upload type
+    const acceptedTypes = getAcceptedFileTypes(validatedUploadType);
+    const maxSize = getMaxFileSize(validatedUploadType);
+
     // Validate file type
-    if (!ACCEPTED_IMAGE_TYPES.includes(validatedFile.type)) {
+    if (!acceptedTypes.includes(validatedFile.type)) {
       return NextResponse.json(
-        { error: `Invalid file type. Accepted types: ${ACCEPTED_IMAGE_TYPES.join(', ')}` },
+        { error: `Invalid file type. Accepted types: ${acceptedTypes.join(', ')}` },
         { status: 400 },
       );
     }
 
     // Validate file size
-    const maxSize = validatedUploadType === 'logo' ? MAX_AVATAR_SIZE_BYTES : MAX_COVER_SIZE_BYTES;
     if (validatedFile.size > maxSize) {
       const maxSizeMB = maxSize / (1024 * 1024);
       return NextResponse.json(
@@ -86,10 +88,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Generate unique filename with project folder structure
     const fileExtension = validatedFile.name.split('.').pop();
-    const fileName = `${projectId}/${validatedUploadType}_${Date.now()}.${fileExtension}`;
+    const timestamp = Date.now();
+    let fileName: string;
+
+    if (validatedUploadType === 'document') {
+      // For documents, preserve original filename but make it unique
+      const originalName = validatedFile.name.replace(/\.[^/.]+$/, ''); // Remove extension
+      const sanitizedName = originalName.replace(/[^a-zA-Z0-9-_]/g, '_'); // Sanitize filename
+      fileName = `${projectId}/documents/${sanitizedName}_${timestamp}.${fileExtension}`;
+    } else {
+      // For logo/banner, use simple naming
+      fileName = `${projectId}/${validatedUploadType}_${timestamp}.${fileExtension}`;
+    }
+
     const bucketName = PROJECT_FILES_BUCKET_NAME;
 
-    // Upload to Supabase Storage (using same approach as profile upload)
+    // Upload to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from(bucketName)
       .upload(fileName, validatedFile, {
@@ -126,9 +140,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     return NextResponse.json({
       success: true,
-      imageUrl: publicUrlData.publicUrl,
+      imageUrl: publicUrlData.publicUrl, // Keep this name for backward compatibility
+      fileUrl: publicUrlData.publicUrl, // Add this for documents
       fileName: fileName,
       uploadType: validatedUploadType,
+      originalFileName: validatedFile.name,
+      fileSize: validatedFile.size,
+      mimeType: validatedFile.type,
     });
   } catch (error) {
     console.error('Project upload POST handler error:', error);

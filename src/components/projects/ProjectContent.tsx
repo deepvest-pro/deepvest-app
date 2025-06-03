@@ -35,6 +35,7 @@ import {
 import { ProjectWithSnapshot, ProjectRole } from '@/types/supabase';
 import { toggleProjectPublication, publishDraft, deleteProject } from '@/app/projects/[id]/actions';
 import { useToastHelpers } from '@/components/layout/ToastProvider';
+import { ProjectDocuments } from './ProjectDocuments';
 
 interface ProjectContentProps {
   project: ProjectWithSnapshot;
@@ -436,6 +437,9 @@ export function ProjectContent({ project: initialProject, userRole }: ProjectCon
               </Box>
             </Flex>
           </Card>
+
+          {/* Documents Section */}
+          <ProjectDocuments projectId={project.id} />
 
           {/* Additional sections can be added here */}
           {/* For example: Team members, milestones, funding rounds, etc. */}

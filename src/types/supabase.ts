@@ -235,6 +235,53 @@ type AuthIdentityInsert = Pick<AuthIdentityRow, 'id' | 'user_id' | 'identity_dat
   Partial<Omit<AuthIdentityRow, 'id' | 'user_id' | 'identity_data' | 'provider'>>;
 type AuthIdentityUpdate = Partial<AuthIdentityRow>;
 
+// Project content type enum
+export type ContentType =
+  | 'presentation'
+  | 'research'
+  | 'pitch_deck'
+  | 'whitepaper'
+  | 'video'
+  | 'audio'
+  | 'image'
+  | 'report'
+  | 'document'
+  | 'spreadsheet'
+  | 'table'
+  | 'chart'
+  | 'infographic'
+  | 'case_study'
+  | 'other';
+
+// Project content fields
+type ProjectContentFields = {
+  project_id: UUID;
+  slug: string;
+  title: string;
+  content_type: ContentType;
+  content: string;
+  description: string | null;
+  file_urls: string[];
+  author_id: UUID;
+  is_public: boolean;
+  deleted_at: string | null;
+};
+
+// Project content row type
+export type ProjectContentRow = CommonTableFields & ProjectContentFields;
+
+// Project content type
+export type ProjectContent = ProjectContentRow;
+
+// Project content with author info
+export type ProjectContentWithAuthor = ProjectContent & {
+  author?: {
+    id: string;
+    full_name: string | null;
+    email: string;
+  } | null;
+};
+
 // Database interface using the reusable types
 export interface Database {
   public: {

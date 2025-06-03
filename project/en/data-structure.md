@@ -131,7 +131,7 @@ type ProjectContent = {
     | "case_study"
     | "other",
   content: string, // Markdown
-  file_urls: string[],
+  file_url: string,
   author_id: string, // User UUID
   is_public: boolean,
   deleted_at: string, // ISO date
