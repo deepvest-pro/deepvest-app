@@ -1,0 +1,44 @@
+// Breakpoints for responsive design
+$breakpoint-xs: 375px; // Small smartphones
+$breakpoint-sm: 576px; // Larger smartphones
+$breakpoint-md: 768px; // Tablets
+$breakpoint-lg: 992px; // Desktops
+$breakpoint-xl: 1200px; // Large desktops
+$breakpoint-2xl: 1536px; // Extra large desktops
+
+// Breakpoint mixins
+@mixin xs {
+  @media (min-width: #{$breakpoint-xs}) {
+    @content;
+  }
+}
+
+@mixin sm {
+  @media (min-width: #{$breakpoint-sm}) {
+    @content;
+  }
+}
+
+@mixin md {
+  @media (min-width: #{$breakpoint-md}) {
+    @content;
+  }
+}
+
+@mixin lg {
+  @media (min-width: #{$breakpoint-lg}) {
+    @content;
+  }
+}
+
+@mixin xl {
+  @media (min-width: #{$breakpoint-xl}) {
+    @content;
+  }
+}
+
+@mixin xxl {
+  @media (min-width: #{$breakpoint-2xl}) {
+    @content;
+  }
+}
