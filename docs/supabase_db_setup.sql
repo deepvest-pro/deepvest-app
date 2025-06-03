@@ -576,6 +576,86 @@ GRANT USAGE ON SCHEMA public TO anon, authenticated;
 -- GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO authenticated; -- If using explicit sequences not managed by DEFAULT gen_random_uuid()
 
 
+-- ==========================================
+-- Function to publish project draft
+-- ==========================================
+CREATE OR REPLACE FUNCTION public.publish_project_draft(
+  project_id UUID,
+  new_public_snapshot_id UUID
+)
+RETURNS VOID AS $$
+DECLARE
+  v_user_id UUID;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'User must be authenticated to publish draft';
+  END IF;
+  
+  -- Check if user is owner of the project
+  IF NOT EXISTS (
+    SELECT 1 FROM public.project_permissions pp 
+    WHERE pp.project_id = publish_project_draft.project_id 
+    AND pp.user_id = v_user_id
+    AND pp.role = 'owner'
+  ) THEN
+    RAISE EXCEPTION 'Only project owners can publish drafts';
+  END IF;
+  
+  -- Update project to set new public snapshot
+  UPDATE public.projects 
+  SET public_snapshot_id = new_public_snapshot_id
+  WHERE id = project_id;
+  
+  -- Lock the snapshot
+  UPDATE public.snapshots 
+  SET is_locked = true
+  WHERE id = new_public_snapshot_id;
+  
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+COMMENT ON FUNCTION public.publish_project_draft(UUID, UUID) IS 'Publishes a project draft by setting public_snapshot_id and locking the snapshot. Only project owners can call this.';
+
+-- ==========================================
+-- Function to publish project draft
+-- ==========================================
+CREATE OR REPLACE FUNCTION public.publish_project_draft(
+  project_id UUID,
+  new_public_snapshot_id UUID
+)
+RETURNS VOID AS $$
+DECLARE
+  v_user_id UUID;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'User must be authenticated to publish draft';
+  END IF;
+  
+  -- Check if user is owner of the project
+  IF NOT EXISTS (
+    SELECT 1 FROM public.project_permissions pp 
+    WHERE pp.project_id = publish_project_draft.project_id 
+    AND pp.user_id = v_user_id
+    AND pp.role = 'owner'
+  ) THEN
+    RAISE EXCEPTION 'Only project owners can publish drafts';
+  END IF;
+  
+  -- Update project to set new public snapshot
+  UPDATE public.projects 
+  SET public_snapshot_id = new_public_snapshot_id
+  WHERE id = project_id;
+  
+  -- Lock the snapshot
+  UPDATE public.snapshots 
+  SET is_locked = true
+  WHERE id = new_public_snapshot_id;
+  
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+COMMENT ON FUNCTION public.publish_project_draft(UUID, UUID) IS 'Publishes a project draft by setting public_snapshot_id and locking the snapshot. Only project owners can call this.';
+
 -- Removed old policy for projects: DROP POLICY IF EXISTS "Users with permissions can view projects" ON public.projects;
 -- This was replaced by the combination of "Public projects are viewable by everyone" and "Owners can view their non-archived projects".
 

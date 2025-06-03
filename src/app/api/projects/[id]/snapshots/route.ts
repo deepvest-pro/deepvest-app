@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { checkUserProjectRole, createNewSnapshot } from '@/lib/supabase/helpers';
+import { checkUserProjectRole } from '@/lib/supabase/helpers';
 import { createSupabaseServerClient } from '@/lib/supabase/client';
 import { snapshotSchema } from '@/lib/validations/project';
 import { z } from 'zod';
@@ -80,17 +80,16 @@ export async function GET(request: Request, { params }: RouteContext) {
 
 /**
  * POST /api/projects/[id]/snapshots
- * Create a new snapshot for a project
+ * Create a new snapshot for editing (stored in new_snapshot_id)
  */
 export async function POST(request: Request, { params }: RouteContext) {
   const supabase = await createSupabaseServerClient();
 
   const {
     data: { user },
-    error: authError,
   } = await supabase.auth.getUser();
 
-  if (authError || !user) {
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -110,60 +109,204 @@ export async function POST(request: Request, { params }: RouteContext) {
     const json = await request.json();
 
     // Validate the request body
-    const formData = snapshotSchema.parse(json);
+    const validatedData = snapshotSchema.parse(json);
 
-    // Get project name for snapshot creation
-    const { data: projectData } = await supabase
+    // Get the current project to check for existing new_snapshot
+    const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('new_snapshot_id')
+      .select('new_snapshot_id, public_snapshot_id')
       .eq('id', projectId)
       .single();
 
-    // Check if there's an existing new snapshot to get its data
-    let currentSnapshot = null;
+    if (projectError || !project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
 
-    if (projectData?.new_snapshot_id) {
-      const { data: existingSnapshot } = await supabase
+    console.log('POST /api/projects/[id]/snapshots - Project snapshot IDs:', {
+      public_snapshot_id: project.public_snapshot_id,
+      new_snapshot_id: project.new_snapshot_id,
+      areEqual: project.public_snapshot_id === project.new_snapshot_id,
+    });
+
+    let snapshotId: string;
+
+    // If new_snapshot_id exists AND differs from public_snapshot_id, we're editing a draft
+    // If they are equal (or new_snapshot_id is null), we need to create a new snapshot
+    const isEditingDraft =
+      project.new_snapshot_id && project.new_snapshot_id !== project.public_snapshot_id;
+
+    if (isEditingDraft) {
+      // Update existing draft snapshot (new_snapshot_id differs from public_snapshot_id)
+      console.log('Updating existing draft snapshot:', project.new_snapshot_id);
+      const { data: updatedSnapshot, error: updateError } = await supabase
         .from('snapshots')
-        .select('name, status, country, city')
-        .eq('id', projectData.new_snapshot_id)
+        .update({
+          ...validatedData,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', project.new_snapshot_id)
+        .eq('is_locked', false) // Ensure we can only update unlocked snapshots
+        .select()
         .single();
 
-      if (existingSnapshot) {
-        currentSnapshot = existingSnapshot;
+      if (updateError || !updatedSnapshot) {
+        return NextResponse.json(
+          { error: updateError?.message || 'Failed to update snapshot' },
+          { status: 500 },
+        );
+      }
+
+      snapshotId = updatedSnapshot.id;
+    } else {
+      // Create new snapshot (no draft exists or new_snapshot_id equals public_snapshot_id)
+      console.log('Creating new snapshot for project:', projectId);
+
+      // Get the next version number
+      const { data: latestSnapshot } = await supabase
+        .from('snapshots')
+        .select('version')
+        .eq('project_id', projectId)
+        .order('version', { ascending: false })
+        .limit(1)
+        .single();
+
+      const nextVersion = (latestSnapshot?.version || 0) + 1;
+
+      // Create new snapshot
+      const { data: newSnapshot, error: createError } = await supabase
+        .from('snapshots')
+        .insert({
+          project_id: projectId,
+          version: nextVersion,
+          author_id: user.id,
+          is_locked: false,
+          ...validatedData,
+        })
+        .select()
+        .single();
+
+      if (createError || !newSnapshot) {
+        return NextResponse.json(
+          { error: createError?.message || 'Failed to create snapshot' },
+          { status: 500 },
+        );
+      }
+
+      snapshotId = newSnapshot.id;
+
+      // Update project to reference the new snapshot
+      const { error: projectUpdateError } = await supabase
+        .from('projects')
+        .update({ new_snapshot_id: snapshotId })
+        .eq('id', projectId);
+
+      if (projectUpdateError) {
+        // Rollback: delete the created snapshot
+        await supabase.from('snapshots').delete().eq('id', snapshotId);
+        return NextResponse.json({ error: 'Failed to link snapshot to project' }, { status: 500 });
       }
     }
 
-    // Create the new snapshot
-    const { data, error } = await createNewSnapshot(projectId, {
-      name: formData.title, // Map title from form to name in database
-      project_id: projectId,
-      author_id: user.id,
-      description: formData.description || '',
-      status: currentSnapshot?.status || 'idea',
-      country: currentSnapshot?.country || null,
-      city: currentSnapshot?.city || null,
-      is_locked: false,
-      version: 0, // This will be calculated in the helper function
-      // Add any other required fields
-      slogan: null,
-      repository_urls: null,
-      website_urls: null,
-      logo_url: null,
-      banner_url: null,
-      video_urls: null,
-    });
+    // Fetch the complete snapshot data to return
+    const { data: snapshot, error: fetchError } = await supabase
+      .from('snapshots')
+      .select('*')
+      .eq('id', snapshotId)
+      .single();
 
-    if (error) {
-      return NextResponse.json({ error }, { status: 500 });
+    if (fetchError || !snapshot) {
+      return NextResponse.json(
+        { error: 'Snapshot created but failed to fetch details' },
+        { status: 500 },
+      );
     }
 
-    return NextResponse.json({ snapshot: data }, { status: 201 });
+    return NextResponse.json({ snapshot });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.errors }, { status: 400 });
     }
 
+    console.error('Error creating/updating snapshot:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+/**
+ * PUT /api/projects/[id]/snapshots/publish
+ * Publish the current new_snapshot (move it to public_snapshot_id and lock it)
+ */
+export async function PUT(request: Request, { params }: RouteContext) {
+  const supabase = await createSupabaseServerClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { id: projectId } = await params;
+
+  // Check if user has owner permission (only owners can publish)
+  const isOwner = await checkUserProjectRole(user.id, projectId, 'owner');
+
+  if (!isOwner) {
+    return NextResponse.json({ error: 'Only project owners can publish changes' }, { status: 403 });
+  }
+
+  try {
+    // Get the current project
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('new_snapshot_id, public_snapshot_id')
+      .eq('id', projectId)
+      .single();
+
+    if (projectError || !project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+
+    if (!project.new_snapshot_id) {
+      return NextResponse.json({ error: 'No draft changes to publish' }, { status: 400 });
+    }
+
+    // Start a transaction-like operation
+    // 1. Lock the old public snapshot if it exists
+    if (project.public_snapshot_id) {
+      await supabase
+        .from('snapshots')
+        .update({ is_locked: true })
+        .eq('id', project.public_snapshot_id);
+    }
+
+    // 2. Lock the new snapshot and make it public
+    const { error: lockError } = await supabase
+      .from('snapshots')
+      .update({ is_locked: true })
+      .eq('id', project.new_snapshot_id);
+
+    if (lockError) {
+      return NextResponse.json({ error: 'Failed to lock snapshot' }, { status: 500 });
+    }
+
+    // 3. Update project to move new_snapshot to public_snapshot
+    const { error: updateError } = await supabase
+      .from('projects')
+      .update({
+        public_snapshot_id: project.new_snapshot_id,
+        new_snapshot_id: null,
+      })
+      .eq('id', projectId);
+
+    if (updateError) {
+      return NextResponse.json({ error: 'Failed to publish changes' }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, message: 'Changes published successfully' });
+  } catch (error) {
+    console.error('Error publishing snapshot:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

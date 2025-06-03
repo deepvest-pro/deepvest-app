@@ -6,7 +6,7 @@ import { ProjectRole, ProjectWithSnapshot } from '@/types/supabase';
 import { Container } from '@radix-ui/themes';
 import Link from 'next/link';
 import { Pencil1Icon, GlobeIcon, EyeClosedIcon } from '@radix-ui/react-icons';
-import { toggleProjectPublication } from '@/app/projects/[id]/actions';
+import { toggleProjectPublication, publishDraft } from '@/app/projects/[id]/actions';
 import { useToastHelpers } from '@/components/layout/ToastProvider';
 
 interface ProjectDetailsProps {
@@ -29,6 +29,10 @@ export function ProjectDetails({
   const canEdit = userRole === 'admin' || userRole === 'owner' || userRole === 'editor';
   const isOwner = userRole === 'owner';
 
+  // Check if there's a draft to publish
+  const hasDraftToPublish =
+    project.new_snapshot_id && project.new_snapshot_id !== project.public_snapshot_id;
+
   // Get the current snapshot info
   const currentSnapshot = project.new_snapshot || project.public_snapshot;
   const projectName = currentSnapshot?.name || 'Unnamed Project';
@@ -47,6 +51,37 @@ export function ProjectDetails({
           </Text>
         </Box>
         <Flex gap="3" align="center">
+          {isOwner && hasDraftToPublish && (
+            <Button
+              variant="solid"
+              color="blue"
+              onClick={() => {
+                startTransition(async () => {
+                  try {
+                    const result = await publishDraft({
+                      projectId: project.id,
+                    });
+
+                    if (result.success) {
+                      // Update the project state to reflect that draft is now published
+                      setProject(prev => ({
+                        ...prev,
+                        public_snapshot_id: prev.new_snapshot_id,
+                      }));
+                      toastSuccess('Draft published successfully!');
+                    } else {
+                      toastError(result.error || 'Failed to publish draft.');
+                    }
+                  } catch {
+                    toastError('An unexpected error occurred while publishing draft.');
+                  }
+                });
+              }}
+              disabled={isPending}
+            >
+              {isPending ? 'Publishing...' : 'Publish Draft'}
+            </Button>
+          )}
           {isOwner && (
             <Button
               variant={project.is_public ? 'soft' : 'solid'}

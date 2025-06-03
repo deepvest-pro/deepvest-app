@@ -78,70 +78,55 @@ export const updateProjectSchema = createProjectSchema.partial().extend({
 export type UpdateProjectForm = z.infer<typeof updateProjectSchema>;
 
 /**
- * Schema for validating project snapshots
+ * Schema for validating project snapshots (matching DB structure)
  */
 export const snapshotSchema = z.object({
-  title: z
+  name: z
     .string()
-    .min(2, { message: 'Title must be at least 2 characters' })
-    .max(100, { message: 'Title cannot exceed 100 characters' }),
+    .min(2, { message: 'Name must be at least 2 characters' })
+    .max(100, { message: 'Name cannot exceed 100 characters' }),
+  slogan: z
+    .string()
+    .max(200, { message: 'Slogan cannot exceed 200 characters' })
+    .optional()
+    .nullable(),
   description: z
     .string()
-    .max(2000, { message: 'Description cannot exceed 2000 characters' })
-    .optional(),
-  problem: z
+    .min(1, { message: 'Description is required' })
+    .max(2000, { message: 'Description cannot exceed 2000 characters' }),
+  status: z.enum([
+    'idea',
+    'concept',
+    'prototype',
+    'mvp',
+    'beta',
+    'launched',
+    'growing',
+    'scaling',
+    'established',
+    'acquired',
+    'closed',
+  ]),
+  country: z
     .string()
-    .max(2000, { message: 'Problem statement cannot exceed 2000 characters' })
-    .optional(),
-  solution: z
-    .string()
-    .max(2000, { message: 'Solution description cannot exceed 2000 characters' })
-    .optional(),
-  target_audience: z
-    .string()
-    .max(1000, { message: 'Target audience cannot exceed 1000 characters' })
-    .optional(),
-  market_size: z
-    .string()
-    .max(1000, { message: 'Market size cannot exceed 1000 characters' })
-    .optional(),
-  business_model: z
-    .string()
-    .max(1000, { message: 'Business model cannot exceed 1000 characters' })
-    .optional(),
-  competitive_advantage: z
-    .string()
-    .max(1000, { message: 'Competitive advantage cannot exceed 1000 characters' })
-    .optional(),
-  funding_stage: z
-    .string()
-    .max(100, { message: 'Funding stage cannot exceed 100 characters' })
-    .optional(),
-  funding_goal: z
-    .string()
-    .max(100, { message: 'Funding goal cannot exceed 100 characters' })
-    .optional(),
-  revenue: z
-    .string()
-    .max(100, { message: 'Revenue information cannot exceed 100 characters' })
-    .optional(),
-  team_description: z
-    .string()
-    .max(1000, { message: 'Team description cannot exceed 1000 characters' })
-    .optional(),
-  timeline: z.string().max(1000, { message: 'Timeline cannot exceed 1000 characters' }).optional(),
-  looking_for: z
-    .string()
-    .max(500, { message: 'Looking for cannot exceed 500 characters' })
-    .optional(),
-  contact_email: z
-    .string()
-    .email({ message: 'Must be a valid email address' })
+    .max(100, { message: 'Country cannot exceed 100 characters' })
     .optional()
-    .or(z.literal('')),
-  website_url: z.string().url({ message: 'Must be a valid URL' }).optional().or(z.literal('')),
-  pitch_deck_url: z.string().url({ message: 'Must be a valid URL' }).optional().or(z.literal('')),
-  demo_url: z.string().url({ message: 'Must be a valid URL' }).optional().or(z.literal('')),
+    .nullable(),
+  city: z.string().max(100, { message: 'City cannot exceed 100 characters' }).optional().nullable(),
+  repository_urls: z
+    .array(z.string().url({ message: 'Must be a valid URL' }))
+    .optional()
+    .nullable(),
+  website_urls: z
+    .array(z.string().url({ message: 'Must be a valid URL' }))
+    .optional()
+    .nullable(),
+  logo_url: z.string().url({ message: 'Must be a valid URL' }).optional().nullable(),
+  banner_url: z.string().url({ message: 'Must be a valid URL' }).optional().nullable(),
+  video_urls: z
+    .array(z.string().url({ message: 'Must be a valid URL' }))
+    .optional()
+    .nullable(),
 });
 
 /**

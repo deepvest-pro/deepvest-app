@@ -111,9 +111,11 @@ export async function PUT(request: Request, { params }: RouteContext) {
 
   try {
     const json = await request.json();
+    console.log('PUT /api/projects/[id] - Request data:', json);
 
     // Validate the request body
     const validatedData = updateProjectSchema.omit({ id: true }).parse(json);
+    console.log('PUT /api/projects/[id] - Validated data:', validatedData);
 
     // Update the project
     const { data, error } = await updateProject(id, validatedData);

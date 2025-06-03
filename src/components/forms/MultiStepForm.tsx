@@ -27,6 +27,9 @@ interface MultiStepFormProps<T extends FormData = FormData> {
   initialData?: T;
   isSubmitting?: boolean;
   showSummary?: boolean;
+  submitButtonText?: string;
+  submittingText?: string;
+  successMessage?: string;
 }
 
 export function MultiStepForm<T extends FormData = FormData>({
@@ -35,6 +38,9 @@ export function MultiStepForm<T extends FormData = FormData>({
   initialData = {} as T,
   isSubmitting = false,
   showSummary = true,
+  submitButtonText = 'Create Project',
+  submittingText = 'Creating Project...',
+  successMessage = 'Project successfully created!',
 }: MultiStepFormProps<T>) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [formData, setFormData] = useState<T>(initialData);
@@ -77,10 +83,10 @@ export function MultiStepForm<T extends FormData = FormData>({
   const handleComplete = async (data: T) => {
     try {
       await onComplete(data);
-      success('Project successfully created!');
+      success(successMessage);
     } catch (err) {
       console.error('Error completing form:', err);
-      error('Failed to create project. Please try again.');
+      error('Failed to save changes. Please try again.');
     }
   };
 
@@ -207,7 +213,7 @@ export function MultiStepForm<T extends FormData = FormData>({
             }}
             disabled={isSubmitting}
           >
-            {isSubmitting ? 'Creating Project...' : 'Create Project'}
+            {isSubmitting ? submittingText : submitButtonText}
           </Button>
         )}
       </Flex>

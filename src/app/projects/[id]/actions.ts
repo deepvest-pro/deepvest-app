@@ -165,3 +165,84 @@ export async function toggleProjectPublication({
     return { success: false, error: 'An unexpected error occurred' };
   }
 }
+
+interface PublishDraftArgs {
+  projectId: string;
+}
+
+export async function publishDraft({ projectId }: PublishDraftArgs): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  console.log(`[Action] publishDraft called for project ${projectId}`);
+
+  try {
+    const supabase = await createSupabaseServerClient();
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error('[Action] User not authenticated:', authError);
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    console.log(`[Action] User authenticated: ${user.id}`);
+
+    // Check if user is owner
+    const isOwner = await checkUserProjectRole(user.id, projectId, 'owner');
+    if (!isOwner) {
+      console.warn(`[Action] User ${user.id} is not owner of project ${projectId}.`);
+      return { success: false, error: 'Only the project owner can publish drafts' };
+    }
+
+    console.log(`[Action] User ${user.id} is confirmed owner of project ${projectId}`);
+
+    // Get project details to check if there's a draft to publish
+    const { data: project, error: fetchError } = await supabase
+      .from('projects')
+      .select('public_snapshot_id, new_snapshot_id')
+      .eq('id', projectId)
+      .single();
+
+    if (fetchError || !project) {
+      console.error(`[Action] Error fetching project ${projectId}:`, fetchError);
+      return { success: false, error: 'Project not found' };
+    }
+
+    console.log('[Action] Project state:', project);
+
+    // Check if there's a draft to publish
+    if (!project.new_snapshot_id || project.new_snapshot_id === project.public_snapshot_id) {
+      console.log('[Action] No draft to publish');
+      return { success: false, error: 'No draft to publish' };
+    }
+
+    console.log(`[Action] Publishing draft snapshot ${project.new_snapshot_id}`);
+
+    // Call the database function to publish the draft
+    const { error: publishError } = await supabase.rpc('publish_project_draft', {
+      project_id: projectId,
+      new_public_snapshot_id: project.new_snapshot_id,
+    });
+
+    if (publishError) {
+      console.error(`[Action] Error publishing draft:`, publishError);
+      return { success: false, error: 'Failed to publish draft' };
+    }
+
+    console.log(`[Action] Draft published successfully`);
+
+    // Revalidate paths
+    revalidatePath(`/projects/${projectId}`);
+    revalidatePath('/projects');
+    revalidatePath('/profile');
+
+    return { success: true };
+  } catch (error) {
+    console.error('[Action] Unexpected error in publishDraft:', error);
+    return { success: false, error: 'An unexpected error occurred' };
+  }
+}

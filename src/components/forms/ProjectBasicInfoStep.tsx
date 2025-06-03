@@ -28,6 +28,7 @@ interface ProjectBasicInfoStepProps {
   onSubmit: (data: ProjectBasicInfoFormData) => void;
   initialData?: Partial<ProjectBasicInfoFormData>;
   isSubmitting?: boolean;
+  currentSlug?: string; // Current slug for edit mode - to exclude from uniqueness check
 }
 
 interface SlugCheckResponse {
@@ -39,6 +40,7 @@ export function ProjectBasicInfoStep({
   onSubmit,
   initialData = {},
   isSubmitting = false,
+  currentSlug,
 }: ProjectBasicInfoStepProps) {
   const {
     register,
@@ -58,8 +60,15 @@ export function ProjectBasicInfoStep({
   const watchedName = watch('name');
   const watchedSlug = watch('slug');
 
-  // Auto-generate slug from name when name changes and slug is empty or unchanged
+  // Auto-generate slug from name when name changes and slug is empty
+  // In edit mode, don't auto-generate if we have a currentSlug (preserve existing slug)
   useEffect(() => {
+    // Skip auto-generation in edit mode if we have a currentSlug
+    if (currentSlug) {
+      return;
+    }
+
+    // Only auto-generate if name exists and slug is empty or matches initial data
     if (watchedName && (!watchedSlug || watchedSlug === initialData.slug)) {
       const generatedSlug = watchedName
         .toLowerCase()
@@ -68,7 +77,7 @@ export function ProjectBasicInfoStep({
 
       setValue('slug', generatedSlug);
     }
-  }, [watchedName, watchedSlug, setValue, initialData.slug]);
+  }, [watchedName, watchedSlug, setValue, initialData.slug, currentSlug]);
 
   // Check slug availability with debounce
   useEffect(() => {
@@ -80,18 +89,28 @@ export function ProjectBasicInfoStep({
       return;
     }
 
+    // If we're in edit mode and the slug hasn't changed, mark it as available
+    if (currentSlug && watchedSlug === currentSlug) {
+      setSlugAvailable(true);
+      return;
+    }
+
     const timer = setTimeout(async () => {
       setIsCheckingSlug(true);
       try {
-        const response = await fetch(
-          `/api/projects/check-slug?slug=${encodeURIComponent(watchedSlug)}`,
-          {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+        // Build URL with currentSlug parameter if available
+        const url = new URL('/api/projects/check-slug', window.location.origin);
+        url.searchParams.set('slug', watchedSlug);
+        if (currentSlug) {
+          url.searchParams.set('currentSlug', currentSlug);
+        }
+
+        const response = await fetch(url.toString(), {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
           },
-        );
+        });
 
         if (!response.ok) {
           throw new Error(`Server responded with status: ${response.status}`);
@@ -115,7 +134,7 @@ export function ProjectBasicInfoStep({
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [watchedSlug]);
+  }, [watchedSlug, currentSlug]);
 
   const handleFormSubmit: SubmitHandler<ProjectBasicInfoFormData> = data => {
     if (slugAvailable === false) return;
@@ -155,7 +174,12 @@ export function ProjectBasicInfoStep({
           />
           <Flex gap="1" mt="1" align="center">
             {isCheckingSlug && <Text size="1">Checking availability...</Text>}
-            {slugAvailable === true && (
+            {slugAvailable === true && currentSlug && watchedSlug === currentSlug && (
+              <Text size="1" color="blue">
+                <CheckCircledIcon /> Current URL
+              </Text>
+            )}
+            {slugAvailable === true && !(currentSlug && watchedSlug === currentSlug) && (
               <Text size="1" color="green">
                 <CheckCircledIcon /> URL is available
               </Text>
