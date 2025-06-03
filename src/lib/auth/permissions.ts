@@ -1,5 +1,5 @@
 import { User } from '@supabase/auth-js';
-import { UserProfile } from '@/types/auth';
+import { Profile } from '@/types/auth';
 
 export type UserRole = 'admin' | 'editor' | 'user';
 
@@ -50,7 +50,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
  */
 export function hasPermission(
   user: User | null,
-  profile: UserProfile | null,
+  profile: Profile | null,
   permission: Permission,
 ): boolean {
   if (!user) {
@@ -67,7 +67,7 @@ export function hasPermission(
 /**
  * Get all permissions for a user
  */
-export function getUserPermissions(user: User | null, profile: UserProfile | null): Permission[] {
+export function getUserPermissions(user: User | null, profile: Profile | null): Permission[] {
   if (!user) {
     return [];
   }
@@ -93,7 +93,7 @@ export function isResourceOwner(
 /**
  * Check if user can access admin routes
  */
-export function canAccessAdminRoutes(user: User | null, profile: UserProfile | null): boolean {
+export function canAccessAdminRoutes(user: User | null, profile: Profile | null): boolean {
   return hasPermission(user, profile, 'view:users');
 }
 
@@ -102,7 +102,7 @@ export function canAccessAdminRoutes(user: User | null, profile: UserProfile | n
  */
 export function canEditResource(
   user: User | null,
-  profile: UserProfile | null,
+  profile: Profile | null,
   resourceUserId: string | null | undefined,
   resourceType: 'project' | 'comment',
 ): boolean {

@@ -1,16 +1,25 @@
 import type { User as SupabaseUser } from '@supabase/auth-js';
 import type { UserRole } from '@/lib/auth/permissions';
 
-export interface UserProfile {
+export interface Profile {
   id: string;
-  full_name?: string;
-  nickname?: string;
+  full_name?: string | null;
+  nickname?: string | null;
   avatar_url?: string | null;
+  cover_url?: string | null;
   role?: UserRole;
-  [key: string]: string | number | boolean | null | undefined;
+  bio?: string | null;
+  professional_background?: string | null;
+  city?: string | null;
+  country?: string | null;
+  startup_ecosystem_role?: string | null;
+  website_url?: string | null;
+  x_username?: string | null;
+  linkedin_username?: string | null;
+  github_username?: string | null;
 }
 
 export interface UserData {
   user: SupabaseUser;
-  profile: UserProfile | null;
+  profile: Profile | null;
 }

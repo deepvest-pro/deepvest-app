@@ -1,6 +1,8 @@
 'use client';
 
+import React, { useState, FormEvent } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   Box,
   Container,
@@ -12,123 +14,396 @@ import {
   Grid,
   Button,
   Separator,
+  AspectRatio,
+  Spinner,
+  Badge,
+  Section,
 } from '@radix-ui/themes';
-import { UserData } from '@/types/auth';
+import {
+  InfoCircledIcon,
+  Pencil1Icon,
+  GlobeIcon,
+  LinkedInLogoIcon,
+  GitHubLogoIcon,
+  TwitterLogoIcon,
+  PersonIcon,
+  SizeIcon,
+  CheckCircledIcon,
+} from '@radix-ui/react-icons';
+import { UserData, Profile } from '@/types/auth';
+import { FileUploadArea } from '@/components/forms/file-upload-area';
+import { MAX_AVATAR_SIZE_BYTES, MAX_COVER_SIZE_BYTES } from '@/lib/file-constants';
+import { useToastHelpers } from '@/components/layout/ToastProvider';
 
 interface ProfileContentProps {
   userData: UserData | null;
 }
 
-export function ProfileContent({ userData }: ProfileContentProps) {
+export function ProfileContent({ userData: initialUserData }: ProfileContentProps) {
+  const [userData, setUserData] = useState<UserData | null>(initialUserData);
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
+  const [selectedCoverFile, setSelectedCoverFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const { success: toastSuccess, error: toastError } = useToastHelpers();
+
   if (!userData) {
-    return null; // This shouldn't happen due to ProtectedRoute, but TypeScript needs it
+    return (
+      <Container size="3" py="9">
+        <Card size="3">
+          <Flex direction="column" align="center" justify="center" gap="4" p="6">
+            <SizeIcon width="40" height="40" color="var(--gray-9)" />
+            <Heading size="5" align="center">
+              Profile Not Found
+            </Heading>
+            <Text color="gray" align="center">
+              Your profile information could not be loaded.
+            </Text>
+            <Link href="/auth/sign-in" passHref>
+              <Button color="blue" highContrast size="3">
+                Sign In
+              </Button>
+            </Link>
+          </Flex>
+        </Card>
+      </Container>
+    );
   }
 
   const { user, profile } = userData;
 
+  const handleFileSelected = (file: File | null, type: 'avatar' | 'cover') => {
+    if (type === 'avatar') {
+      setSelectedAvatarFile(file);
+    } else {
+      setSelectedCoverFile(file);
+    }
+  };
+
+  const handleImageUploads = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedAvatarFile && !selectedCoverFile) {
+      toastError('No new images selected to upload.');
+      return;
+    }
+
+    setIsUploading(true);
+    let anImageWasUploaded = false;
+
+    try {
+      if (selectedAvatarFile) {
+        const formData = new FormData();
+        formData.append('file', selectedAvatarFile);
+        formData.append('uploadType', 'avatar');
+
+        const response = await fetch('/api/profile/image-upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Failed to upload avatar.');
+        setUserData(prev => (prev ? { ...prev, profile: result.profile as Profile } : null));
+        setSelectedAvatarFile(null);
+        anImageWasUploaded = true;
+      }
+
+      if (selectedCoverFile) {
+        const formData = new FormData();
+        formData.append('file', selectedCoverFile);
+        formData.append('uploadType', 'cover');
+
+        const response = await fetch('/api/profile/image-upload', {
+          method: 'POST',
+          body: formData,
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Failed to upload cover image.');
+        setUserData(prev => (prev ? { ...prev, profile: result.profile as Profile } : null));
+        setSelectedCoverFile(null);
+        anImageWasUploaded = true;
+      }
+
+      if (anImageWasUploaded) {
+        toastSuccess('Image(s) uploaded successfully!');
+      }
+    } catch (error: unknown) {
+      console.error('Upload error:', error);
+      if (error instanceof Error) {
+        toastError(error.message);
+      } else {
+        toastError('An unexpected error occurred during upload.');
+      }
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Format date to be more readable
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
+
   return (
-    <Container size="2" py="6">
-      <Flex direction="column" gap="6">
-        <Heading size="8" mb="2">
-          Your Profile
-        </Heading>
+    <Container>
+      {/* Cover Image */}
+      <Box position="relative" mb="8">
+        <AspectRatio ratio={16 / 6} style={{ maxHeight: '300px', borderRadius: 'var(--radius-3)' }}>
+          {profile?.cover_url ? (
+            <Image
+              src={profile.cover_url}
+              alt="Profile cover"
+              fill
+              style={{ objectFit: 'cover', borderRadius: 'var(--radius-3)' }}
+              priority
+            />
+          ) : (
+            <Box
+              style={{
+                background: 'linear-gradient(135deg, var(--accent-9), var(--accent-10))',
+                width: '100%',
+                height: '100%',
+                borderRadius: 'var(--radius-3)',
+              }}
+            />
+          )}
+        </AspectRatio>
+      </Box>
 
-        <Card>
-          <Flex gap="4" align="center" mb="4">
-            {profile?.avatar_url ? (
+      <Grid columns={{ initial: '1', md: '4' }} gap="6">
+        {/* Left Column - Profile Info */}
+        <Box style={{ gridColumn: 'span 1' }}>
+          <Flex direction="column" gap="4" align="center">
+            {/* Avatar */}
+            <Box
+              style={{
+                margin: '-80px 0 0',
+                padding: '4px',
+                background: 'white',
+                borderRadius: '50%',
+                boxShadow: 'var(--shadow-3)',
+              }}
+            >
               <Avatar
-                size="5"
-                src={profile.avatar_url}
-                alt="Profile"
+                size="8"
+                src={profile?.avatar_url || undefined}
+                alt="Profile Avatar"
                 radius="full"
                 fallback={profile?.full_name?.[0] || user.email?.[0] || '?'}
+                style={{ width: '160px', height: '160px' }}
               />
-            ) : (
-              <Avatar
-                size="5"
-                color="blue"
-                radius="full"
-                fallback={profile?.full_name?.[0] || user.email?.[0] || '?'}
-              />
-            )}
-
-            <Box>
-              <Heading size="5" mb="1">
-                {profile?.full_name || 'No Name Set'}
-              </Heading>
-              <Text size="3" color="gray">
-                @{profile?.nickname || 'user'}
-              </Text>
             </Box>
+
+            {/* User Details Card */}
+            <Card style={{ width: '100%' }}>
+              <Flex direction="column" gap="3">
+                {/* Account Details */}
+                <Heading size="3">Account Details</Heading>
+                <Flex direction="column" gap="1">
+                  <Flex justify="between">
+                    <Text weight="medium">Email</Text>
+                    <Text>{user.email}</Text>
+                  </Flex>
+
+                  {user.email_confirmed_at ? (
+                    <Flex gap="2" align="center">
+                      <CheckCircledIcon color="var(--green-9)" />
+                      <Text size="2">Verified on {formatDate(user.email_confirmed_at)}</Text>
+                    </Flex>
+                  ) : (
+                    <Text size="2" color="gray">
+                      Email not yet verified
+                    </Text>
+                  )}
+                </Flex>
+
+                <Separator my="2" />
+
+                {/* Actions */}
+                <Link href="/profile/edit" passHref>
+                  <Button color="blue" size="2" style={{ width: '100%' }}>
+                    <Pencil1Icon />
+                    Edit Profile
+                  </Button>
+                </Link>
+              </Flex>
+            </Card>
+
+            {/* Social Links Card */}
+            {(profile?.website_url ||
+              profile?.x_username ||
+              profile?.linkedin_username ||
+              profile?.github_username) && (
+              <Card style={{ width: '100%' }}>
+                <Heading size="3" mb="3">
+                  Connect
+                </Heading>
+                <Flex direction="column" gap="2">
+                  {profile?.website_url && (
+                    <Link
+                      href={
+                        profile.website_url.startsWith('http')
+                          ? profile.website_url
+                          : `https://${profile.website_url}`
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Button variant="soft" color="gray" size="2" style={{ width: '100%' }}>
+                        <GlobeIcon />
+                        Website
+                      </Button>
+                    </Link>
+                  )}
+                  {profile?.x_username && (
+                    <Link
+                      href={`https://x.com/${profile.x_username}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Button variant="soft" color="gray" size="2" style={{ width: '100%' }}>
+                        <TwitterLogoIcon />
+                        Twitter
+                      </Button>
+                    </Link>
+                  )}
+                  {profile?.linkedin_username && (
+                    <Link
+                      href={`https://linkedin.com/in/${profile.linkedin_username}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Button variant="soft" color="gray" size="2" style={{ width: '100%' }}>
+                        <LinkedInLogoIcon />
+                        LinkedIn
+                      </Button>
+                    </Link>
+                  )}
+                  {profile?.github_username && (
+                    <Link
+                      href={`https://github.com/${profile.github_username}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Button variant="soft" color="gray" size="2" style={{ width: '100%' }}>
+                        <GitHubLogoIcon />
+                        GitHub
+                      </Button>
+                    </Link>
+                  )}
+                </Flex>
+              </Card>
+            )}
           </Flex>
-        </Card>
+        </Box>
 
-        <Grid columns={{ initial: '1', md: '2' }} gap="6">
-          <Card>
-            <Heading size="4" mb="4">
-              Profile Information
-            </Heading>
-            <Flex direction="column" gap="3">
-              <Flex justify="between">
-                <Text weight="medium">Email</Text>
-                <Text>{user.email}</Text>
-              </Flex>
-              <Separator size="4" />
-              <Flex justify="between">
-                <Text weight="medium">Profile Created</Text>
-                <Text>
-                  {new Date(user.created_at).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                  })}
+        {/* Right Column - Profile Content */}
+        <Box style={{ gridColumn: 'span 3' }}>
+          <Card mb="6">
+            <Flex direction="column" gap="4">
+              <Flex direction="column" gap="1">
+                <Flex align="center" gap="2">
+                  <Heading size="7">{profile?.full_name || 'No Name Set'}</Heading>
+                  {user.email_confirmed_at && (
+                    <Badge color="blue" size="1" variant="soft" radius="full">
+                      <Flex gap="1" align="center">
+                        <CheckCircledIcon />
+                        <Text>Verified</Text>
+                      </Flex>
+                    </Badge>
+                  )}
+                </Flex>
+
+                <Text size="3" color="gray">
+                  @{profile?.nickname || 'user'}
                 </Text>
+
+                <Flex mt="2" gap="3" wrap="wrap">
+                  {profile?.country && profile?.city && (
+                    <Badge variant="soft" size="1" radius="full">
+                      <Flex gap="1" align="center">
+                        <PersonIcon />
+                        <Text>
+                          {profile.city}, {profile.country}
+                        </Text>
+                      </Flex>
+                    </Badge>
+                  )}
+
+                  {user.created_at && (
+                    <Badge variant="soft" size="1" radius="full">
+                      <Flex gap="1" align="center">
+                        <InfoCircledIcon />
+                        <Text>Joined {formatDate(user.created_at)}</Text>
+                      </Flex>
+                    </Badge>
+                  )}
+                </Flex>
               </Flex>
-              <Separator size="4" />
-              <Flex justify="between">
-                <Text weight="medium">Email Verified</Text>
-                <Text>{user.email_confirmed_at ? 'Yes' : 'No'}</Text>
-              </Flex>
+
+              {profile?.bio && (
+                <Box>
+                  <Separator my="3" />
+                  <Text size="2">{profile.bio}</Text>
+                </Box>
+              )}
             </Flex>
           </Card>
 
-          <Card>
-            <Heading size="4" mb="4">
-              Profile Information
-            </Heading>
-            <Flex direction="column" gap="3">
-              <Flex justify="between">
-                <Text weight="medium">Professional Background</Text>
-                <Text>{profile?.professional_background || 'Not provided'}</Text>
-              </Flex>
-              <Separator size="4" />
-              <Flex justify="between">
-                <Text weight="medium">Location</Text>
-                <Text>
-                  {profile?.city && profile?.country
-                    ? `${profile.city}, ${profile.country}`
-                    : 'Not provided'}
-                </Text>
-              </Flex>
-              <Separator size="4" />
-              <Box>
-                <Text weight="medium" mb="2">
-                  Bio
-                </Text>
-                <Text>{profile?.bio || 'No bio provided'}</Text>
-              </Box>
-            </Flex>
-          </Card>
-        </Grid>
+          {/* Professional Background */}
+          {profile?.professional_background && (
+            <Section mb="6">
+              <Card>
+                <Heading size="5" mb="3">
+                  Professional Background
+                </Heading>
+                <Text size="2">{profile.professional_background}</Text>
+              </Card>
+            </Section>
+          )}
 
-        <Flex justify="center" mt="4">
-          <Link href="/profile/edit">
-            <Button size="3" color="blue">
-              Edit Profile
-            </Button>
-          </Link>
-        </Flex>
-      </Flex>
+          {/* Image Upload Controls */}
+          <Card>
+            <Heading size="5" mb="4">
+              Update Profile Images
+            </Heading>
+            <form onSubmit={handleImageUploads}>
+              <Grid columns={{ initial: '1', sm: '2' }} gap="4">
+                <FileUploadArea
+                  label="Avatar"
+                  currentImageUrl={profile?.avatar_url}
+                  onFileSelect={file => handleFileSelected(file, 'avatar')}
+                  uploadType="avatar"
+                  maxFileSizeMB={MAX_AVATAR_SIZE_BYTES / 1024 / 1024}
+                  aspectRatio="1 / 1"
+                  fallbackText={profile?.full_name?.[0] || user.email?.[0] || '?'}
+                />
+
+                <FileUploadArea
+                  label="Cover Image"
+                  currentImageUrl={profile?.cover_url}
+                  onFileSelect={file => handleFileSelected(file, 'cover')}
+                  uploadType="cover"
+                  maxFileSizeMB={MAX_COVER_SIZE_BYTES / 1024 / 1024}
+                  aspectRatio="16 / 9"
+                />
+              </Grid>
+
+              {(selectedAvatarFile || selectedCoverFile) && (
+                <Flex justify="end" mt="4">
+                  <Button type="submit" size="2" color="green" disabled={isUploading}>
+                    {isUploading && <Spinner size="2" mr="2" />}
+                    Save Image Changes
+                  </Button>
+                </Flex>
+              )}
+            </form>
+          </Card>
+        </Box>
+      </Grid>
     </Container>
   );
 }

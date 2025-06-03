@@ -11,14 +11,14 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Session, User } from '@supabase/supabase-js';
-import type { UserProfile, UserData } from '@/types/auth';
+import type { Profile, UserData } from '@/types/auth';
 import { useQueryClient } from '@tanstack/react-query';
 import { getUserData } from '../react-query/auth-actions';
 import { signOut as signOutAction } from './auth-actions';
 
 interface AuthContextType {
   user: User | null;
-  profile: UserProfile | null;
+  profile: Profile | null;
   userData: UserData | null;
   session: Session | null;
   isLoading: boolean;
@@ -45,7 +45,7 @@ export function AuthProvider({ children, initialSession, initialUser }: AuthProv
 
   const [session, setSession] = useState<Session | null>(initialSession);
   const [user, setUser] = useState<User | null>(initialUser?.user || null);
-  const [profile, setProfile] = useState<UserProfile | null>(initialUser?.profile || null);
+  const [profile, setProfile] = useState<Profile | null>(initialUser?.profile || null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userData, setUserData] = useState<UserData | null>(initialUser);

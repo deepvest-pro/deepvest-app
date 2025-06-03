@@ -56,6 +56,7 @@ Extends the built-in auth.users with application-specific profile information.
 | full_name               | TEXT      | User's full name                       | NOT NULL                                                 |
 | nickname                | TEXT      | Unique username for URLs               | NOT NULL, UNIQUE                                         |
 | avatar_url              | TEXT      | URL to user's avatar                   | NULL allowed                                             |
+| cover_url               | TEXT      | URL to user's cover image              | NULL allowed                                             |
 | bio                     | TEXT      | Short biography                        | NULL allowed                                             |
 | professional_background | TEXT      | Professional experience description    | NULL allowed                                             |
 | startup_ecosystem_role  | TEXT      | Role in startup ecosystem              | NULL allowed                                             |

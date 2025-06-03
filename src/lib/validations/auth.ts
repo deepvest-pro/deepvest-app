@@ -50,6 +50,8 @@ export const profileUpdateSchema = z.object({
     .max(255, 'Maximum length is 255 characters')
     .optional()
     .nullable(),
+  avatar_url: z.string().url('Please enter a valid URL for the avatar').optional().nullable(),
+  cover_url: z.string().url('Please enter a valid URL for the cover image').optional().nullable(),
   x_username: z.string().max(50, 'Maximum length is 50 characters').optional().nullable(),
   linkedin_username: z.string().max(100, 'Maximum length is 100 characters').optional().nullable(),
   github_username: z.string().max(50, 'Maximum length is 50 characters').optional().nullable(),

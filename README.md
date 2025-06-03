@@ -9,15 +9,32 @@ Before running the application, you need to set up your environment variables:
 1. Create a `.env` file in the root of the project with the following variables:
 
 ```
-# Supabase - приватные ключи, доступны только на сервере
+# Supabase - privaКлючи Supabase, доступны только на сервере
 SUPABASE_URL=your_supabase_url
 SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
 # URL приложения
 APP_URL=http://localhost:3000
 ```
 
 > **IMPORTANT**: Supabase keys with the `NEXT_PUBLIC_` prefix have been deprecated and should not be used for security reasons. All Supabase operations should be performed server-side only.
+
+### Setting Up Supabase Storage
+
+The application uses Supabase Storage for profile images. To set up the required storage buckets:
+
+1. Make sure your `.env` file includes the `SUPABASE_SERVICE_ROLE_KEY` (required for bucket creation)
+2. Run the storage setup script:
+
+```bash
+node scripts/setup-storage-buckets.mjs
+```
+
+This script will create the following storage buckets if they don't exist:
+
+- `avatars` - For user profile avatar images
+- `profile-covers` - For profile cover/header images
 
 ### Running the Development Server
 
@@ -46,6 +63,7 @@ This project follows these security best practices:
 1. **Server-side Access Only** - All Supabase operations are performed on the server side only (using Server Components, Server Actions, or Middleware).
 2. **No Client-side Supabase Keys** - The project doesn't expose Supabase API keys to the client.
 3. **Secure Authentication Flow** - Auth tokens are managed through HTTP cookies, not localStorage.
+4. **File Upload Validation** - All file uploads are validated on both client and server side for file type and size.
 
 ## Learn More
 

@@ -3,7 +3,9 @@
 import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
-import type { UserData, UserProfile } from '@/types/auth';
+import type { UserData } from '@/types/auth';
+
+type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
 
 /**
  * Creates a Supabase client for server components and server actions
@@ -213,7 +215,7 @@ export async function getUserWithProfile(): Promise<UserData | null> {
       .from('user_profiles')
       .select('*')
       .eq('id', userData.user.id)
-      .single();
+      .single<UserProfile>();
 
     if (profileError && profileError.code !== 'PGRST116') {
       console.error('Error fetching profile:', profileError);
@@ -222,18 +224,21 @@ export async function getUserWithProfile(): Promise<UserData | null> {
     const profile: UserProfile | null = data
       ? {
           id: data.id,
+          created_at: data.created_at,
+          updated_at: data.updated_at,
           full_name: data.full_name,
           nickname: data.nickname,
           avatar_url: data.avatar_url,
+          cover_url: data.cover_url,
           bio: data.bio,
           professional_background: data.professional_background,
-          city: data.city,
+          startup_ecosystem_role: data.startup_ecosystem_role,
           country: data.country,
+          city: data.city,
           website_url: data.website_url,
           x_username: data.x_username,
           linkedin_username: data.linkedin_username,
           github_username: data.github_username,
-          startup_ecosystem_role: data.startup_ecosystem_role,
         }
       : null;
 

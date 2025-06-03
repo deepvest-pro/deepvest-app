@@ -1,92 +1,177 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
+// Utility types to avoid duplication
+type Timestamp = string;
+type UUID = string;
+
+// Helper type for table definitions
+type TableDefinition<Row, Insert = Row, Update = Partial<Row>> = {
+  Row: Row;
+  Insert: Insert;
+  Update: Update;
+};
+
+// Define common table row fields
+type CommonTableFields = {
+  id: UUID;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+};
+
+// User profile fields without common fields
+type UserProfileFields = {
+  full_name: string;
+  nickname: string;
+  avatar_url: string | null;
+  cover_url: string | null;
+  bio: string | null;
+  professional_background: string | null;
+  startup_ecosystem_role: string | null;
+  country: string | null;
+  city: string | null;
+  website_url: string | null;
+  x_username: string | null;
+  linkedin_username: string | null;
+  github_username: string | null;
+};
+
+// Define user profile row type (all fields required)
+type UserProfileRow = CommonTableFields & UserProfileFields;
+
+// Define user profile insert type (only id is required, others optional)
+type UserProfileInsert = Pick<UserProfileRow, 'id'> &
+  Partial<Omit<CommonTableFields, 'id'>> &
+  Pick<UserProfileFields, 'full_name' | 'nickname'> &
+  Partial<Omit<UserProfileFields, 'full_name' | 'nickname'>>;
+
+// Define user profile update type (all fields optional)
+type UserProfileUpdate = Partial<UserProfileRow>;
+
+// Permission roles
+type ProjectRole = 'viewer' | 'editor' | 'admin' | 'owner';
+
+// Project permissions fields
+type ProjectPermissionFields = {
+  project_id: UUID;
+  user_id: UUID;
+  role: ProjectRole;
+};
+
+// Define project permissions row type
+type ProjectPermissionRow = CommonTableFields & ProjectPermissionFields;
+
+// Define project permissions insert type
+type ProjectPermissionInsert = Partial<Omit<CommonTableFields, 'id'>> &
+  ProjectPermissionFields & { id?: UUID };
+
+// Define project permissions update type
+type ProjectPermissionUpdate = Partial<ProjectPermissionRow>;
+
+// Bucket row type
+type BucketRow = {
+  id: UUID;
+  name: string;
+  owner: UUID | null;
+  created_at: Timestamp | null;
+  updated_at: Timestamp | null;
+  public: boolean | null;
+};
+
+// Bucket insert type
+type BucketInsert = Pick<BucketRow, 'id' | 'name'> & Partial<Omit<BucketRow, 'id' | 'name'>>;
+
+// Bucket update type
+type BucketUpdate = Partial<BucketRow>;
+
+// Storage object row type
+type StorageObjectRow = {
+  id: UUID;
+  bucket_id: UUID;
+  name: string;
+  owner: UUID | null;
+  created_at: Timestamp | null;
+  updated_at: Timestamp | null;
+  metadata: Json | null;
+};
+
+// Storage object insert type
+type StorageObjectInsert = Pick<StorageObjectRow, 'bucket_id' | 'name'> &
+  Partial<Omit<StorageObjectRow, 'bucket_id' | 'name'>>;
+
+// Storage object update type
+type StorageObjectUpdate = Partial<StorageObjectRow>;
+
+// Auth user row type
+type AuthUserRow = {
+  id: UUID;
+  instance_id: string | null;
+  aud: string | null;
+  role: string | null;
+  email: string | null;
+  encrypted_password: string | null;
+  email_confirmed_at: Timestamp | null;
+  invited_at: Timestamp | null;
+  confirmation_token: string | null;
+  confirmation_sent_at: Timestamp | null;
+  recovery_token: string | null;
+  recovery_sent_at: Timestamp | null;
+  email_change_token_new: string | null;
+  email_change: string | null;
+  email_change_sent_at: Timestamp | null;
+  last_sign_in_at: Timestamp | null;
+  raw_app_meta_data: Json | null;
+  raw_user_meta_data: Json | null;
+  is_super_admin: boolean | null;
+  created_at: Timestamp | null;
+  updated_at: Timestamp | null;
+  phone: string | null;
+  phone_confirmed_at: Timestamp | null;
+  phone_change: string | null;
+  phone_change_token: string | null;
+  phone_change_sent_at: Timestamp | null;
+  confirmed_at: Timestamp | null;
+  email_change_token_current: string | null;
+  email_change_confirm_status: number | null;
+  banned_until: Timestamp | null;
+  reauthentication_token: string | null;
+  reauthentication_sent_at: Timestamp | null;
+  is_sso_user: boolean | null;
+  deleted_at: Timestamp | null;
+};
+
+// Auth user insert and update types
+type AuthUserInsert = Pick<AuthUserRow, 'id'> & Partial<Omit<AuthUserRow, 'id'>>;
+type AuthUserUpdate = Partial<AuthUserRow>;
+
+// Auth identity row type
+type AuthIdentityRow = {
+  id: UUID;
+  user_id: UUID;
+  identity_data: Json;
+  provider: string;
+  last_sign_in_at: Timestamp | null;
+  created_at: Timestamp | null;
+  updated_at: Timestamp | null;
+};
+
+// Auth identity insert and update types
+type AuthIdentityInsert = Pick<AuthIdentityRow, 'id' | 'user_id' | 'identity_data' | 'provider'> &
+  Partial<Omit<AuthIdentityRow, 'id' | 'user_id' | 'identity_data' | 'provider'>>;
+type AuthIdentityUpdate = Partial<AuthIdentityRow>;
+
+// Database interface using the reusable types
 export interface Database {
   public: {
     Tables: {
       // User Profiles
-      user_profiles: {
-        Row: {
-          id: string;
-          created_at: string;
-          updated_at: string;
-          full_name: string;
-          nickname: string;
-          avatar_url: string | null;
-          bio: string | null;
-          professional_background: string | null;
-          startup_ecosystem_role: string | null;
-          country: string | null;
-          city: string | null;
-          website_url: string | null;
-          x_username: string | null;
-          linkedin_username: string | null;
-          github_username: string | null;
-        };
-        Insert: {
-          id: string;
-          created_at?: string;
-          updated_at?: string;
-          full_name: string;
-          nickname: string;
-          avatar_url?: string | null;
-          bio?: string | null;
-          professional_background?: string | null;
-          startup_ecosystem_role?: string | null;
-          country?: string | null;
-          city?: string | null;
-          website_url?: string | null;
-          x_username?: string | null;
-          linkedin_username?: string | null;
-          github_username?: string | null;
-        };
-        Update: {
-          id?: string;
-          created_at?: string;
-          updated_at?: string;
-          full_name?: string;
-          nickname?: string;
-          avatar_url?: string | null;
-          bio?: string | null;
-          professional_background?: string | null;
-          startup_ecosystem_role?: string | null;
-          country?: string | null;
-          city?: string | null;
-          website_url?: string | null;
-          x_username?: string | null;
-          linkedin_username?: string | null;
-          github_username?: string | null;
-        };
-      };
+      user_profiles: TableDefinition<UserProfileRow, UserProfileInsert, UserProfileUpdate>;
 
       // Project Permissions
-      project_permissions: {
-        Row: {
-          id: string;
-          created_at: string;
-          updated_at: string;
-          project_id: string;
-          user_id: string;
-          role: 'viewer' | 'editor' | 'admin' | 'owner';
-        };
-        Insert: {
-          id?: string;
-          created_at?: string;
-          updated_at?: string;
-          project_id: string;
-          user_id: string;
-          role: 'viewer' | 'editor' | 'admin' | 'owner';
-        };
-        Update: {
-          id?: string;
-          created_at?: string;
-          updated_at?: string;
-          project_id?: string;
-          user_id?: string;
-          role?: 'viewer' | 'editor' | 'admin' | 'owner';
-        };
-      };
-
-      // Add other tables as needed based on project requirements
+      project_permissions: TableDefinition<
+        ProjectPermissionRow,
+        ProjectPermissionInsert,
+        ProjectPermissionUpdate
+      >;
     };
     Views: {
       [_ in never]: never;
@@ -100,61 +185,8 @@ export interface Database {
   };
   storage: {
     Tables: {
-      buckets: {
-        Row: {
-          id: string;
-          name: string;
-          owner: string | null;
-          created_at: string | null;
-          updated_at: string | null;
-          public: boolean | null;
-        };
-        Insert: {
-          id: string;
-          name: string;
-          owner?: string | null;
-          created_at?: string | null;
-          updated_at?: string | null;
-          public?: boolean | null;
-        };
-        Update: {
-          id?: string;
-          name?: string;
-          owner?: string | null;
-          created_at?: string | null;
-          updated_at?: string | null;
-          public?: boolean | null;
-        };
-      };
-      objects: {
-        Row: {
-          id: string;
-          bucket_id: string;
-          name: string;
-          owner: string | null;
-          created_at: string | null;
-          updated_at: string | null;
-          metadata: Json | null;
-        };
-        Insert: {
-          id?: string;
-          bucket_id: string;
-          name: string;
-          owner?: string | null;
-          created_at?: string | null;
-          updated_at?: string | null;
-          metadata?: Json | null;
-        };
-        Update: {
-          id?: string;
-          bucket_id?: string;
-          name?: string;
-          owner?: string | null;
-          created_at?: string | null;
-          updated_at?: string | null;
-          metadata?: Json | null;
-        };
-      };
+      buckets: TableDefinition<BucketRow, BucketInsert, BucketUpdate>;
+      objects: TableDefinition<StorageObjectRow, StorageObjectInsert, StorageObjectUpdate>;
     };
     Views: {
       [_ in never]: never;
@@ -168,145 +200,8 @@ export interface Database {
   };
   auth: {
     Tables: {
-      users: {
-        Row: {
-          id: string;
-          instance_id: string | null;
-          aud: string | null;
-          role: string | null;
-          email: string | null;
-          encrypted_password: string | null;
-          email_confirmed_at: string | null;
-          invited_at: string | null;
-          confirmation_token: string | null;
-          confirmation_sent_at: string | null;
-          recovery_token: string | null;
-          recovery_sent_at: string | null;
-          email_change_token_new: string | null;
-          email_change: string | null;
-          email_change_sent_at: string | null;
-          last_sign_in_at: string | null;
-          raw_app_meta_data: Json | null;
-          raw_user_meta_data: Json | null;
-          is_super_admin: boolean | null;
-          created_at: string | null;
-          updated_at: string | null;
-          phone: string | null;
-          phone_confirmed_at: string | null;
-          phone_change: string | null;
-          phone_change_token: string | null;
-          phone_change_sent_at: string | null;
-          confirmed_at: string | null;
-          email_change_token_current: string | null;
-          email_change_confirm_status: number | null;
-          banned_until: string | null;
-          reauthentication_token: string | null;
-          reauthentication_sent_at: string | null;
-          is_sso_user: boolean | null;
-          deleted_at: string | null;
-        };
-        Insert: {
-          id: string;
-          instance_id?: string | null;
-          aud?: string | null;
-          role?: string | null;
-          email?: string | null;
-          encrypted_password?: string | null;
-          email_confirmed_at?: string | null;
-          invited_at?: string | null;
-          confirmation_token?: string | null;
-          confirmation_sent_at?: string | null;
-          recovery_token?: string | null;
-          recovery_sent_at?: string | null;
-          email_change_token_new?: string | null;
-          email_change?: string | null;
-          email_change_sent_at?: string | null;
-          last_sign_in_at?: string | null;
-          raw_app_meta_data?: Json | null;
-          raw_user_meta_data?: Json | null;
-          is_super_admin?: boolean | null;
-          created_at?: string | null;
-          updated_at?: string | null;
-          phone?: string | null;
-          phone_confirmed_at?: string | null;
-          phone_change?: string | null;
-          phone_change_token?: string | null;
-          phone_change_sent_at?: string | null;
-          confirmed_at?: string | null;
-          email_change_token_current?: string | null;
-          email_change_confirm_status?: number | null;
-          banned_until?: string | null;
-          reauthentication_token?: string | null;
-          reauthentication_sent_at?: string | null;
-          is_sso_user?: boolean | null;
-          deleted_at?: string | null;
-        };
-        Update: {
-          id?: string;
-          instance_id?: string | null;
-          aud?: string | null;
-          role?: string | null;
-          email?: string | null;
-          encrypted_password?: string | null;
-          email_confirmed_at?: string | null;
-          invited_at?: string | null;
-          confirmation_token?: string | null;
-          confirmation_sent_at?: string | null;
-          recovery_token?: string | null;
-          recovery_sent_at?: string | null;
-          email_change_token_new?: string | null;
-          email_change?: string | null;
-          email_change_sent_at?: string | null;
-          last_sign_in_at?: string | null;
-          raw_app_meta_data?: Json | null;
-          raw_user_meta_data?: Json | null;
-          is_super_admin?: boolean | null;
-          created_at?: string | null;
-          updated_at?: string | null;
-          phone?: string | null;
-          phone_confirmed_at?: string | null;
-          phone_change?: string | null;
-          phone_change_token?: string | null;
-          phone_change_sent_at?: string | null;
-          confirmed_at?: string | null;
-          email_change_token_current?: string | null;
-          email_change_confirm_status?: number | null;
-          banned_until?: string | null;
-          reauthentication_token?: string | null;
-          reauthentication_sent_at?: string | null;
-          is_sso_user?: boolean | null;
-          deleted_at?: string | null;
-        };
-      };
-      identities: {
-        Row: {
-          id: string;
-          user_id: string;
-          identity_data: Json;
-          provider: string;
-          last_sign_in_at: string | null;
-          created_at: string | null;
-          updated_at: string | null;
-        };
-        Insert: {
-          id: string;
-          user_id: string;
-          identity_data: Json;
-          provider: string;
-          last_sign_in_at?: string | null;
-          created_at?: string | null;
-          updated_at?: string | null;
-        };
-        Update: {
-          id?: string;
-          user_id?: string;
-          identity_data?: Json;
-          provider?: string;
-          last_sign_in_at?: string | null;
-          created_at?: string | null;
-          updated_at?: string | null;
-        };
-      };
+      users: TableDefinition<AuthUserRow, AuthUserInsert, AuthUserUpdate>;
+      identities: TableDefinition<AuthIdentityRow, AuthIdentityInsert, AuthIdentityUpdate>;
     };
     Views: {
       [_ in never]: never;
