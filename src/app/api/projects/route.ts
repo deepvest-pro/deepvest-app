@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createNewProject, getUserProjects } from '@/lib/supabase/helpers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createNewProject, getAllVisibleProjects } from '@/lib/supabase/helpers';
+import { createSupabaseServerClient } from '@/lib/supabase/client';
 import { createProjectSchema } from '@/lib/validations/project';
 import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
@@ -9,26 +8,23 @@ import type { Database } from '@/types/supabase';
 
 /**
  * GET /api/projects
- * Get all projects for the current user
+ * Get all visible projects:
+ * - For guests: all public projects
+ * - For authenticated users: all public projects + their own projects
  */
 export async function GET() {
-  const cookieStore = cookies();
-  const supabase = createRouteHandlerClient<Database>({ cookies: () => cookieStore });
+  const supabase = await createSupabaseServerClient();
 
   const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-  if (sessionError) {
+  if (authError && authError.message !== 'Auth session missing!') {
     return NextResponse.json({ error: 'Authentication error' }, { status: 500 });
   }
 
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { data, error } = await getUserProjects(session.user.id);
+  const { data, error } = await getAllVisibleProjects(user?.id);
 
   if (error || !data) {
     return NextResponse.json({ error: error || 'Failed to fetch projects' }, { status: 500 });
@@ -118,19 +114,18 @@ async function checkSlugAvailability(
  */
 export async function POST(request: Request) {
   try {
-    const cookieStore = cookies();
-    const supabase = createRouteHandlerClient<Database>({ cookies: () => cookieStore });
+    const supabase = await createSupabaseServerClient();
 
     const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
-    if (sessionError) {
+    if (authError) {
       return NextResponse.json({ error: 'Authentication error' }, { status: 500 });
     }
 
-    if (!session) {
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

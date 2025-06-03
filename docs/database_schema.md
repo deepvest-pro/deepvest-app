@@ -92,10 +92,12 @@ Main table to store projects created by users.
 **Policies**:
 
 - SELECT: Public projects are viewable by everyone
-- SELECT: Users with permissions on a project can view it
-- UPDATE: Users with editor, admin, or owner role can update projects
+- SELECT: Project owners can view their non-archived projects (even if private)
+- UPDATE: Users with editor, admin, or owner role can update projects (general updates)
+- UPDATE: Project owners can update all project fields, including is_public and is_archived
+- UPDATE: Editors and admins can update limited fields (excluding is_public and is_archived)
+- UPDATE: Only project owners can change publicity status (is_public and is_archived fields)
 - DELETE: Only users with owner role can delete projects
-- UPDATE to is_public: Only users with owner role can change publicity status
 
 ### `public.snapshots`
 
@@ -219,9 +221,12 @@ DeepVest uses Row Level Security (RLS) to control access to data at the database
 ### projects policies:
 
 - Public projects are viewable by everyone
-- Users with permissions can view their projects
-- Only users with appropriate role can modify projects
-- Only owners can delete projects or change publicity status
+- Project owners can view their non-archived projects (even if private)
+- Users with editor, admin, or owner role can update projects (general updates)
+- Project owners can update all project fields, including is_public and is_archived
+- Editors and admins can update limited fields (excluding is_public and is_archived)
+- Only project owners can change publicity status (is_public and is_archived fields)
+- Only owners can delete projects
 
 ### snapshots policies:
 

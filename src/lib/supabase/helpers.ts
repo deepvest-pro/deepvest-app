@@ -7,13 +7,62 @@ import type {
   UserProfile,
   UUID,
 } from '@/types/supabase';
-import { createServerSupabaseClient, getCurrentUser } from './client';
+import { createSupabaseServerClient, getCurrentUser } from './client';
+
+/**
+ * Helper function to fetch and construct snapshot with expanded author
+ */
+async function fetchAndProcessSnapshot(snapshotId: UUID): Promise<Snapshot | null> {
+  const supabase = await createSupabaseServerClient();
+  let snapshotData: Snapshot | null = null;
+
+  // Fetch raw snapshot data first (both for authenticated and guest users)
+  const { data: rawData, error: rawError } = await supabase
+    .from('snapshots')
+    .select('*')
+    .eq('id', snapshotId)
+    .single();
+
+  if (rawError || !rawData) {
+    console.warn(
+      `[fetchAndProcessSnapshot] Failed to fetch raw snapshot ${snapshotId}. Error: ${rawError?.message}. RawData: ${JSON.stringify(rawData)}`,
+    );
+    return null;
+  }
+
+  // Now fetch author profile separately if author_id exists
+  let authorInfo: ExpandedUser | null = null;
+  if (rawData.author_id) {
+    // author_id is UUID from rawData
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('id, full_name, nickname, avatar_url') // Select only needed fields
+      .eq('id', rawData.author_id) // Use the UUID
+      .single();
+
+    if (!profileError && profile) {
+      authorInfo = {
+        id: profile.id,
+        email: undefined,
+        user_profiles: profile as UserProfile,
+      };
+    } else if (profileError) {
+      console.warn(
+        `[fetchAndProcessSnapshot] Failed to fetch profile for author ${rawData.author_id}: ${profileError.message}`,
+      );
+    }
+  }
+
+  // Assign the constructed ExpandedUser to author_id, or keep the original UUID if profile fetch failed
+  snapshotData = { ...rawData, author_id: authorInfo || rawData.author_id };
+  return snapshotData;
+}
 
 /**
  * Fetches a project by ID with permissions and snapshots
  */
 export async function getProjectWithDetails(projectId: string) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createSupabaseServerClient();
   const user = await getCurrentUser();
 
   // Fetch the project
@@ -46,11 +95,10 @@ export async function getProjectWithDetails(projectId: string) {
     if (rawPermissions) {
       const processedPermissions: ProjectPermission[] = [];
       for (const rawPerm of rawPermissions) {
-        let expandedUser: ExpandedUser | null = null;
-        const userId = rawPerm.user_id as UUID; // Cast to UUID, as it's raw from DB
+        let userDetails: ExpandedUser | null = null;
+        const userId = rawPerm.user_id as UUID;
 
         if (userId) {
-          // Attempt to fetch the user's profile
           const { data: profile, error: profileError } = await supabase
             .from('user_profiles')
             .select('id, full_name, nickname, avatar_url')
@@ -61,114 +109,24 @@ export async function getProjectWithDetails(projectId: string) {
             console.warn(
               `[getProjectWithDetails] Auth user: Failed to fetch profile for user ${userId} in project ${projectId}: ${profileError.message}`,
             );
-            // If profile fetch fails, expandedUser remains null, and later userId (UUID) will be used.
           } else if (profile) {
-            expandedUser = {
+            userDetails = {
               id: profile.id,
-              email: undefined, // Email is not fetched here to avoid RLS issues on auth.users
+              email: undefined,
               user_profiles: profile as UserProfile,
             };
           }
         }
-        // If expandedUser is still null (profile fetch failed or no userId), use userId (UUID).
-        // Otherwise, use the constructed expandedUser object.
-        processedPermissions.push({ ...rawPerm, user_id: expandedUser || userId });
+        processedPermissions.push({
+          ...rawPerm,
+          user_id: userId,
+          user_details: userDetails,
+        });
       }
       permissions = processedPermissions;
     } else {
       permissions = [];
     }
-  }
-
-  // Helper function to fetch and construct snapshot with expanded author
-  async function fetchAndProcessSnapshot(snapshotId: UUID): Promise<Snapshot | null> {
-    let snapshotData: Snapshot | null = null;
-
-    if (user) {
-      // Authenticated user: try relational select first
-      const { data: relationalData, error: relationalError } = await supabase
-        .from('snapshots')
-        .select('*, author_id(id, email, user_profiles(id, full_name, nickname, avatar_url))')
-        .eq('id', snapshotId)
-        .single();
-
-      if (!relationalError && relationalData) {
-        // Cast to Snapshot, assuming the select expands author_id to ExpandedUser
-        snapshotData = relationalData as Snapshot;
-      } else {
-        if (relationalError) {
-          console.warn(
-            `[getProjectWithDetails] Auth user: Relational select for snapshot ${snapshotId} author failed: ${relationalError.message}. Falling back.`,
-          );
-        }
-        // Fallback for authenticated user or if relational select somehow fails to expand
-        const { data: rawData, error: rawError } = await supabase
-          .from('snapshots')
-          .select('*')
-          .eq('id', snapshotId)
-          .single();
-        if (rawError || !rawData) return null;
-
-        // rawData.author_id is UUID here. We need to fetch profile and construct ExpandedUser.
-        let authorInfo: ExpandedUser | null = null;
-        if (rawData.author_id) {
-          // author_id is UUID from rawData
-          const { data: profile, error: profileError } = await supabase
-            .from('user_profiles')
-            .select('id, full_name, nickname, avatar_url') // Select only needed fields
-            .eq('id', rawData.author_id) // Use the UUID
-            .single();
-          if (!profileError && profile) {
-            authorInfo = {
-              id: profile.id,
-              email: undefined,
-              /* email might be available if we query auth.users, but sticking to profiles for now */ user_profiles:
-                profile as UserProfile,
-            };
-          } else if (profileError) {
-            console.warn(
-              `[getProjectWithDetails] Auth user (fallback): Failed to fetch profile for author ${rawData.author_id}: ${profileError.message}`,
-            );
-          }
-        }
-        snapshotData = { ...rawData, author_id: authorInfo || rawData.author_id }; // Assign constructed author or keep UUID if profile fetch failed
-      }
-    } else {
-      // Guest user: fetch snapshot raw, then profile separately
-      const { data: rawData, error: rawError } = await supabase
-        .from('snapshots')
-        .select('*')
-        .eq('id', snapshotId)
-        .single();
-
-      if (rawError || !rawData) {
-        console.warn(
-          `[FAPS] Guest: Failed to fetch raw snapshot ${snapshotId}. Error: ${rawError?.message}. RawData: ${JSON.stringify(rawData)}`,
-        );
-        return null;
-      }
-
-      let authorInfo: ExpandedUser | null = null;
-      if (rawData.author_id) {
-        // author_id is UUID
-        const { data: profile, error: profileError } = await supabase
-          .from('user_profiles')
-          .select('id, full_name, nickname, avatar_url')
-          .eq('id', rawData.author_id) // Use the UUID
-          .single();
-
-        if (!profileError && profile) {
-          authorInfo = { id: profile.id, email: undefined, user_profiles: profile as UserProfile };
-        } else if (profileError) {
-          console.warn(
-            `[getProjectWithDetails] Guest: Failed to fetch profile for author ${rawData.author_id}: ${profileError.message}`,
-          );
-        }
-      }
-      // Assign the constructed ExpandedUser to author_id, or keep the original UUID if profile fetch failed
-      snapshotData = { ...rawData, author_id: authorInfo || rawData.author_id };
-    }
-    return snapshotData;
   }
 
   let publicSnapshot: Snapshot | null = null;
@@ -207,36 +165,165 @@ export async function getProjectWithDetails(projectId: string) {
 }
 
 /**
- * Fetches a user's projects with their roles
+ * Fetches a user's projects with their roles and snapshots
  */
 export async function getUserProjects(userId: string | undefined) {
   if (!userId) {
     return { data: null, error: 'User ID is required' };
   }
 
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createSupabaseServerClient();
 
+  // First get the user's project permissions
   const { data: permissions, error: permissionsError } = await supabase
     .from('project_permissions')
-    .select('*, project:project_id(*)')
+    .select('project_id, role')
     .eq('user_id', userId);
 
   if (permissionsError) {
     return { error: permissionsError.message, data: null };
   }
 
-  // Transform the data to match our expected format
-  interface PermissionWithProject {
-    project: Project;
-    role: ProjectRole;
+  if (!permissions || permissions.length === 0) {
+    return { data: [], error: null };
   }
 
-  const projects = permissions.map((permission: PermissionWithProject) => ({
-    ...permission.project,
-    role: permission.role,
-  }));
+  // Get project IDs
+  const projectIds = permissions.map(p => p.project_id);
 
-  return { data: projects, error: null };
+  // Fetch projects with snapshots
+  const { data: projects, error: projectsError } = await supabase
+    .from('projects')
+    .select(
+      `
+      *,
+      new_snapshot:new_snapshot_id(*),
+      public_snapshot:public_snapshot_id(*)
+    `,
+    )
+    .in('id', projectIds);
+
+  if (projectsError) {
+    return { error: projectsError.message, data: null };
+  }
+
+  // Combine project data with user roles
+  const projectsWithRoles =
+    projects?.map(project => {
+      const permission = permissions.find(p => p.project_id === project.id);
+      return {
+        ...project,
+        role: permission?.role || 'viewer',
+      };
+    }) || [];
+
+  return { data: projectsWithRoles, error: null };
+}
+
+/**
+ * Fetches all projects that should be visible to a user:
+ * - All public projects (for everyone including guests)
+ * - User's own projects (if authenticated)
+ */
+export async function getAllVisibleProjects(userId?: string) {
+  const supabase = await createSupabaseServerClient();
+
+  try {
+    if (!userId) {
+      // For guests: only show public projects (without snapshots to avoid RLS issues)
+      const { data: publicProjects, error: publicError } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('is_public', true)
+        .eq('is_archived', false);
+
+      if (publicError) {
+        return { error: publicError.message, data: null };
+      }
+
+      // For each project, fetch snapshots separately if they exist
+      const projectsWithSnapshots = [];
+      for (const project of publicProjects || []) {
+        let publicSnapshot = null;
+        let newSnapshot = null;
+
+        // Fetch public snapshot if it exists
+        if (project.public_snapshot_id) {
+          publicSnapshot = await fetchAndProcessSnapshot(project.public_snapshot_id);
+        }
+
+        // Fetch new snapshot if it exists
+        if (project.new_snapshot_id) {
+          newSnapshot = await fetchAndProcessSnapshot(project.new_snapshot_id);
+        }
+
+        projectsWithSnapshots.push({
+          ...project,
+          public_snapshot: publicSnapshot,
+          new_snapshot: newSnapshot,
+          role: null, // Guests don't have roles
+        });
+      }
+
+      return { data: projectsWithSnapshots, error: null };
+    }
+
+    // For authenticated users: get all public projects + user's own projects
+
+    // First get user's project permissions to find their projects
+    const { data: permissions, error: permissionsError } = await supabase
+      .from('project_permissions')
+      .select('project_id, role')
+      .eq('user_id', userId);
+
+    if (permissionsError) {
+      return { error: permissionsError.message, data: null };
+    }
+
+    const userProjectIds = permissions?.map(p => p.project_id) || [];
+
+    // Get all projects that are either:
+    // 1. Public and not archived, OR
+    // 2. User's own projects (regardless of public status)
+    let query = supabase.from('projects').select(
+      `
+        *,
+        new_snapshot:new_snapshot_id(*),
+        public_snapshot:public_snapshot_id(*)
+      `,
+    );
+
+    if (userProjectIds.length > 0) {
+      // User has projects: show public projects OR user's projects
+      query = query.or(
+        `and(is_public.eq.true,is_archived.eq.false),id.in.(${userProjectIds.join(',')})`,
+      );
+    } else {
+      // User has no projects: show only public projects
+      query = query.eq('is_public', true).eq('is_archived', false);
+    }
+
+    const { data: projects, error: projectsError } = await query;
+
+    if (projectsError) {
+      return { error: projectsError.message, data: null };
+    }
+
+    // Add role information for user's projects
+    const projectsWithRoles =
+      projects?.map(project => {
+        const permission = permissions?.find(p => p.project_id === project.id);
+        return {
+          ...project,
+          role: permission?.role || null, // null for public projects user doesn't own
+        };
+      }) || [];
+
+    return { data: projectsWithRoles, error: null };
+  } catch (error) {
+    console.error('Error fetching visible projects:', error);
+    return { error: 'Failed to fetch projects', data: null };
+  }
 }
 
 /**
@@ -249,7 +336,7 @@ export async function checkUserProjectRole(
 ) {
   if (!userId) return false;
 
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createSupabaseServerClient();
 
   // Determine the hierarchy of roles
   const roleHierarchy: Record<ProjectRole, number> = {
@@ -285,7 +372,7 @@ export async function createNewProject(
   description: string,
   status: string,
 ) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createSupabaseServerClient();
 
   // Use the database function to create a project with proper permissions
   const { data, error } = await supabase.rpc('create_project', {
@@ -329,7 +416,7 @@ export async function isSlugAvailable(
 
     // Check if slug is already taken
     try {
-      const supabase = await createServerSupabaseClient();
+      const supabase = await createSupabaseServerClient();
 
       // Verify supabase client was created successfully
       if (!supabase) {
@@ -380,7 +467,7 @@ export async function updateProject(
   projectId: string,
   updates: Partial<Omit<Project, 'id' | 'created_at' | 'updated_at'>>,
 ) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
     .from('projects')
@@ -403,7 +490,7 @@ export async function createNewSnapshot(
   projectId: string,
   snapshotData: Omit<Snapshot, 'id' | 'created_at' | 'updated_at'>,
 ) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createSupabaseServerClient();
 
   // First, get the current highest version number
   const { data: versionData, error: versionError } = await supabase
@@ -453,7 +540,7 @@ export async function createNewSnapshot(
  * Publishes a snapshot (sets it as the public snapshot)
  */
 export async function publishSnapshot(projectId: string, snapshotId: string) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createSupabaseServerClient();
 
   // First lock the snapshot
   const { error: lockError } = await supabase
@@ -487,7 +574,7 @@ export async function publishSnapshot(projectId: string, snapshotId: string) {
  * Adds a user to a project with a specific role
  */
 export async function addUserToProject(projectId: string, userEmail: string, role: ProjectRole) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createSupabaseServerClient();
 
   // First, find the user by email
   const { data: userData, error: userError } = await supabase
@@ -542,7 +629,7 @@ export async function addUserToProject(projectId: string, userEmail: string, rol
  * Removes a user from a project
  */
 export async function removeUserFromProject(projectId: string, userId: string) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createSupabaseServerClient();
 
   // Check if the user is the owner
   const { data: isOwner, error: ownerCheckError } = await supabase
@@ -579,7 +666,7 @@ export async function removeUserFromProject(projectId: string, userId: string) {
  * Updates a user's role in a project
  */
 export async function updateUserRole(projectId: string, userId: string, newRole: ProjectRole) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createSupabaseServerClient();
 
   // Check if the user is the owner and trying to change their role
   if (newRole !== 'owner') {
@@ -612,4 +699,45 @@ export async function updateUserRole(projectId: string, userId: string, newRole:
   }
 
   return { success: true, error: null };
+}
+
+/**
+ * Fetches the core status (public, archived) of a project by its ID using an RPC call.
+ * This is a lightweight check often used before fetching full project details.
+ */
+export async function getProjectCoreStatus(projectId: string): Promise<{
+  data: { is_public: boolean; is_archived: boolean }[] | null;
+  error: string | null;
+}> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc('get_project_status_by_id', {
+    p_project_id: projectId,
+  });
+
+  if (error) {
+    console.error(`[getProjectCoreStatus] RPC error for project ${projectId}: ${error.message}`);
+    return { data: null, error: error.message };
+  }
+
+  // Ensure data is in the expected array format, even if RPC returns a single object
+  const projectStatusArray = Array.isArray(data)
+    ? data
+    : data
+      ? [data] // Wrap single object in an array
+      : [];
+
+  if (projectStatusArray.length === 0) {
+    console.warn(`[getProjectCoreStatus] No status found for project ${projectId} via RPC.`);
+    // It's important to return a structure that page.tsx expects.
+    // If no data means "not found" or an issue, an error might be more appropriate,
+    // or an empty array if the caller handles that. For now, returning null data and an error message.
+    return { data: null, error: 'Project status not found.' };
+  }
+
+  // Explicitly type the returned data if possible, or ensure the caller handles it.
+  // Assuming the RPC returns objects matching { is_public: boolean; is_archived: boolean }
+  return {
+    data: projectStatusArray as { is_public: boolean; is_archived: boolean }[],
+    error: null,
+  };
 }

@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server';
 import { checkUserProjectRole, createNewSnapshot } from '@/lib/supabase/helpers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createSupabaseServerClient } from '@/lib/supabase/client';
 import { snapshotSchema } from '@/lib/validations/project';
 import { z } from 'zod';
 
 interface RouteContext {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 /**
@@ -16,20 +15,21 @@ interface RouteContext {
  * Get all snapshots for a project
  */
 export async function GET(request: Request, { params }: RouteContext) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = await createSupabaseServerClient();
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { id: projectId } = params;
+  const { id: projectId } = await params;
 
   // Check if user has at least viewer permission for this project
-  const hasAccess = await checkUserProjectRole(session.user.id, projectId, 'viewer');
+  const hasAccess = await checkUserProjectRole(user.id, projectId, 'viewer');
 
   if (!hasAccess) {
     return NextResponse.json(
@@ -38,10 +38,10 @@ export async function GET(request: Request, { params }: RouteContext) {
     );
   }
 
-  // Get all snapshots for this project
-  const { data, error } = await supabase
+  // Get all snapshots for this project (raw data first)
+  const { data: rawSnapshots, error } = await supabase
     .from('snapshots')
-    .select('*, author_id(id, full_name, nickname, avatar_url)')
+    .select('*')
     .eq('project_id', projectId)
     .order('version', { ascending: false });
 
@@ -49,7 +49,33 @@ export async function GET(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ snapshots: data });
+  // Fetch author profiles separately to avoid schema cache issues
+  const snapshotsWithAuthors = [];
+  for (const snapshot of rawSnapshots || []) {
+    let authorProfile = null;
+    if (snapshot.author_id) {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('id, full_name, nickname, avatar_url')
+        .eq('id', snapshot.author_id)
+        .single();
+
+      if (profile) {
+        authorProfile = {
+          id: profile.id,
+          email: undefined,
+          user_profiles: profile,
+        };
+      }
+    }
+
+    snapshotsWithAuthors.push({
+      ...snapshot,
+      author_id: authorProfile || snapshot.author_id,
+    });
+  }
+
+  return NextResponse.json({ snapshots: snapshotsWithAuthors });
 }
 
 /**
@@ -57,20 +83,21 @@ export async function GET(request: Request, { params }: RouteContext) {
  * Create a new snapshot for a project
  */
 export async function POST(request: Request, { params }: RouteContext) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = await createSupabaseServerClient();
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { id: projectId } = params;
+  const { id: projectId } = await params;
 
   // Check if user has at least editor permission for this project
-  const hasAccess = await checkUserProjectRole(session.user.id, projectId, 'editor');
+  const hasAccess = await checkUserProjectRole(user.id, projectId, 'editor');
 
   if (!hasAccess) {
     return NextResponse.json(
@@ -111,7 +138,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     const { data, error } = await createNewSnapshot(projectId, {
       name: formData.title, // Map title from form to name in database
       project_id: projectId,
-      author_id: session.user.id,
+      author_id: user.id,
       description: formData.description || '',
       status: currentSnapshot?.status || 'idea',
       country: currentSnapshot?.country || null,

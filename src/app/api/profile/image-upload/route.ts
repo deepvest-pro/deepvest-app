@@ -1,8 +1,6 @@
 // src/app/api/profile/image-upload/route.ts
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createSupabaseServerClient } from '@/lib/supabase/client';
 import { NextResponse } from 'next/server';
-import type { Database } from '@/types/supabase';
 import {
   MAX_AVATAR_SIZE_BYTES,
   MAX_COVER_SIZE_BYTES,
@@ -18,15 +16,14 @@ const uploadSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const cookieStore = cookies();
-  const supabase = createRouteHandlerClient<Database>({ cookies: () => cookieStore });
+  const supabase = await createSupabaseServerClient();
 
   const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-  if (sessionError || !session) {
+  if (authError || !user) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
@@ -66,7 +63,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const userId = session.user.id;
+  const userId = user.id;
   const fileExt = validatedFile.name.split('.').pop();
   const fileName = `${userId}-${Date.now()}.${fileExt}`;
   const bucketName = validatedUploadType === 'avatar' ? AVATAR_BUCKET_NAME : COVER_BUCKET_NAME;

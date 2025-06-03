@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { User } from '@supabase/supabase-js';
 import type { UserData } from '@/types/auth';
-import { getUser, getSession, getUserData } from './auth-actions';
+import { getUser, getUserData } from './auth-actions';
 
 // staleTime and cacheTime
 const AUTH_STALE_TIME = 10 * 60 * 1000; // 10 minutes
@@ -28,14 +28,18 @@ export function useUser() {
 }
 
 /**
- * Hook to fetch the current session using React Query
- * Uses server action instead of direct connection to Supabase
+ * Hook to fetch the current session (DEPRECATED - use useUser instead for security)
+ * This hook is deprecated and should not be used in new code.
  */
 export function useSession() {
+  console.warn(
+    '[useSession] DEPRECATED: This hook is deprecated for security reasons. Use useUser() instead.',
+  );
+
   return useQuery({
     queryKey: ['session'],
     queryFn: async () => {
-      return getSession();
+      return null; // Always return null for security
     },
     staleTime: AUTH_STALE_TIME,
     gcTime: AUTH_CACHE_TIME,

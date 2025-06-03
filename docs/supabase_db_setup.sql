@@ -159,6 +159,7 @@ CREATE POLICY "Owners can view their non-archived projects" ON public.projects
   );
 COMMENT ON POLICY "Owners can view their non-archived projects" ON public.projects IS 'Allows project owners to view their projects, even if private, as long as not archived.';
 
+-- UPDATE policies for projects
 DROP POLICY IF EXISTS "Editors, Admins and Owners can update projects" ON public.projects;
 CREATE POLICY "Editors, Admins and Owners can update projects" ON public.projects
   FOR UPDATE USING (
@@ -169,11 +170,19 @@ CREATE POLICY "Editors, Admins and Owners can update projects" ON public.project
       AND pp.role IN ('editor', 'admin', 'owner')
     )
   );
-COMMENT ON POLICY "Editors, Admins and Owners can update projects" ON public.projects IS 'Allows users with editor, admin, or owner roles to update project fields they have access to change.';
+COMMENT ON POLICY "Editors, Admins and Owners can update projects" ON public.projects IS 'Allows users with editor, admin, or owner roles to update project fields (general updates).';
 
-DROP POLICY IF EXISTS "Only Owners can delete projects" ON public.projects;
-CREATE POLICY "Only Owners can delete projects" ON public.projects
-  FOR DELETE USING (
+DROP POLICY IF EXISTS "Owners can update all project fields" ON public.projects;
+CREATE POLICY "Owners can update all project fields" ON public.projects
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM public.project_permissions pp 
+      WHERE pp.project_id = projects.id 
+      AND pp.user_id = auth.uid()
+      AND pp.role = 'owner'
+    )
+  )
+  WITH CHECK (
     EXISTS (
       SELECT 1 FROM public.project_permissions pp 
       WHERE pp.project_id = projects.id 
@@ -181,7 +190,39 @@ CREATE POLICY "Only Owners can delete projects" ON public.projects
       AND pp.role = 'owner'
     )
   );
-COMMENT ON POLICY "Only Owners can delete projects" ON public.projects IS 'Restricts project deletion to only the project owner.';
+COMMENT ON POLICY "Owners can update all project fields" ON public.projects IS 'Allows project owners to update any project field, including is_public and is_archived.';
+
+DROP POLICY IF EXISTS "Editors and Admins can update limited fields" ON public.projects;
+CREATE POLICY "Editors and Admins can update limited fields" ON public.projects
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM public.project_permissions pp 
+      WHERE pp.project_id = projects.id 
+      AND pp.user_id = auth.uid()
+      AND pp.role IN ('editor', 'admin')
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM public.project_permissions pp 
+      WHERE pp.project_id = projects.id 
+      AND pp.user_id = auth.uid()
+      AND pp.role = 'owner'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.project_permissions pp 
+      WHERE pp.project_id = projects.id 
+      AND pp.user_id = auth.uid()
+      AND pp.role IN ('editor', 'admin')
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM public.project_permissions pp 
+      WHERE pp.project_id = projects.id 
+      AND pp.user_id = auth.uid()
+      AND pp.role = 'owner'
+    )
+  );
+COMMENT ON POLICY "Editors and Admins can update limited fields" ON public.projects IS 'Allows editors and admins to update project fields, but restricts changes to is_public and is_archived (only for non-owners).';
 
 DROP POLICY IF EXISTS "Only Owners can change publicity status" ON public.projects;
 CREATE POLICY "Only Owners can change publicity status" ON public.projects
@@ -202,6 +243,18 @@ CREATE POLICY "Only Owners can change publicity status" ON public.projects
     )
   );
 COMMENT ON POLICY "Only Owners can change publicity status" ON public.projects IS 'Ensures only project owners can change the is_public and is_archived fields.';
+
+DROP POLICY IF EXISTS "Only Owners can delete projects" ON public.projects;
+CREATE POLICY "Only Owners can delete projects" ON public.projects
+  FOR DELETE USING (
+    EXISTS (
+      SELECT 1 FROM public.project_permissions pp 
+      WHERE pp.project_id = projects.id 
+      AND pp.user_id = auth.uid()
+      AND pp.role = 'owner'
+    )
+  );
+COMMENT ON POLICY "Only Owners can delete projects" ON public.projects IS 'Restricts project deletion to only the project owner.';
 
 
 -- ==========================================

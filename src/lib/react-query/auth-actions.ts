@@ -2,7 +2,7 @@
 
 import type { Session, User } from '@supabase/supabase-js';
 import type { UserData } from '@/types/auth';
-import { getCurrentUser, getCurrentSession, getUserWithProfile } from '../supabase/client';
+import { getCurrentUser, getUserWithProfile } from '../supabase/client';
 
 /**
  * Get current user (only user data)
@@ -13,11 +13,14 @@ export async function getUser(): Promise<User | null> {
 }
 
 /**
- * Get current session
- * Used with the useSession client hook
+ * Get current session (DEPRECATED - use getUser instead for security)
+ * This function is deprecated and should not be used in new code.
  */
 export async function getSession(): Promise<Session | null> {
-  return getCurrentSession();
+  console.warn(
+    '[getSession] DEPRECATED: This function is deprecated for security reasons. Use getUser() instead.',
+  );
+  return null;
 }
 
 /**

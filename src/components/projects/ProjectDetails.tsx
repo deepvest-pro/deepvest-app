@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import { Heading, Text, Card, Box, Flex, Button, Tabs } from '@radix-ui/themes';
 import { ProjectRole, ProjectWithSnapshot } from '@/types/supabase';
 import { Container } from '@radix-ui/themes';
 import Link from 'next/link';
-import { Pencil1Icon } from '@radix-ui/react-icons';
+import { Pencil1Icon, GlobeIcon, EyeClosedIcon } from '@radix-ui/react-icons';
+import { toggleProjectPublication } from '@/app/projects/[id]/actions';
+import { useToastHelpers } from '@/components/layout/ToastProvider';
 
 interface ProjectDetailsProps {
   project: ProjectWithSnapshot;
@@ -14,10 +16,18 @@ interface ProjectDetailsProps {
   userRole?: ProjectRole | null;
 }
 
-export function ProjectDetails({ project, isAuthenticated, userRole }: ProjectDetailsProps) {
+export function ProjectDetails({
+  project: initialProject,
+  isAuthenticated,
+  userRole,
+}: ProjectDetailsProps) {
+  const [project, setProject] = useState(initialProject);
   const [activeTab, setActiveTab] = useState('details');
+  const [isPending, startTransition] = useTransition();
+  const { success: toastSuccess, error: toastError } = useToastHelpers();
 
   const canEdit = userRole === 'admin' || userRole === 'owner' || userRole === 'editor';
+  const isOwner = userRole === 'owner';
 
   // Get the current snapshot info
   const currentSnapshot = project.new_snapshot || project.public_snapshot;
@@ -36,13 +46,54 @@ export function ProjectDetails({ project, isAuthenticated, userRole }: ProjectDe
             {project.slug || ''}
           </Text>
         </Box>
-        {canEdit && (
-          <Link href={`/projects/${project.id}/edit`} passHref>
-            <Button>
-              <Pencil1Icon /> Edit Project
+        <Flex gap="3" align="center">
+          {isOwner && (
+            <Button
+              variant={project.is_public ? 'soft' : 'solid'}
+              color={project.is_public ? 'red' : 'green'}
+              onClick={() => {
+                startTransition(async () => {
+                  try {
+                    const result = await toggleProjectPublication({
+                      projectId: project.id,
+                      isCurrentlyPublic: project.is_public,
+                    });
+
+                    if (result.success && typeof result.isPublic === 'boolean') {
+                      setProject(prev => ({ ...prev, is_public: result.isPublic! }));
+                      toastSuccess(
+                        result.isPublic
+                          ? 'Project published successfully!'
+                          : 'Project unpublished successfully!',
+                      );
+                    } else {
+                      toastError(result.error || 'Failed to update project publication status.');
+                    }
+                  } catch {
+                    toastError('An unexpected error occurred while updating project status.');
+                  }
+                });
+              }}
+              disabled={isPending}
+            >
+              {project.is_public ? <EyeClosedIcon /> : <GlobeIcon />}
+              {isPending
+                ? project.is_public
+                  ? 'Unpublishing...'
+                  : 'Publishing...'
+                : project.is_public
+                  ? 'Unpublish'
+                  : 'Publish'}
             </Button>
-          </Link>
-        )}
+          )}
+          {canEdit && (
+            <Link href={`/projects/${project.id}/edit`} passHref>
+              <Button>
+                <Pencil1Icon /> Edit Project
+              </Button>
+            </Link>
+          )}
+        </Flex>
       </Flex>
 
       <Card mb="6">

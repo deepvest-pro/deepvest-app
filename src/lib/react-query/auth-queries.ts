@@ -1,6 +1,6 @@
 'use server';
 
-import { createServerSupabaseClient } from '../supabase/client';
+import { createSupabaseServerClient } from '../supabase/client';
 
 /**
  * Fetches all users with their profiles
@@ -8,7 +8,7 @@ import { createServerSupabaseClient } from '../supabase/client';
  */
 export async function fetchUsers() {
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = await createSupabaseServerClient();
 
     const { data, error } = await supabase.from('user_profiles').select('*');
 
@@ -30,7 +30,7 @@ export async function fetchUsers() {
  */
 export async function fetchUserById(userId: string) {
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = await createSupabaseServerClient();
 
     const { data, error } = await supabase
       .from('user_profiles')

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { createServerSupabaseClient } from './client';
+import { createSupabaseServerClient } from './client';
 import {
   SignInCredentials,
   SignUpCredentials,
@@ -15,7 +15,7 @@ import {
  * Sign in a user with email and password
  */
 export async function signIn(credentials: SignInCredentials) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createSupabaseServerClient();
 
   const { error } = await supabase.auth.signInWithPassword({
     email: credentials.email,
@@ -34,7 +34,7 @@ export async function signIn(credentials: SignInCredentials) {
  * Sign up a new user with email and password
  */
 export async function signUp(credentials: SignUpCredentials) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createSupabaseServerClient();
 
   // First register the user with Supabase Auth
   const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -73,7 +73,7 @@ export async function signUp(credentials: SignUpCredentials) {
  * Sign out the current user
  */
 export async function signOut() {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createSupabaseServerClient();
 
   const { error } = await supabase.auth.signOut();
 
@@ -89,7 +89,7 @@ export async function signOut() {
  * Request a password reset for a user
  */
 export async function resetPassword(request: ResetPasswordRequest) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createSupabaseServerClient();
 
   const { error } = await supabase.auth.resetPasswordForEmail(request.email, {
     redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/reset-password`,
@@ -106,7 +106,7 @@ export async function resetPassword(request: ResetPasswordRequest) {
  * Update a user's password after reset
  */
 export async function updatePassword(request: UpdatePasswordRequest) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createSupabaseServerClient();
 
   const { error } = await supabase.auth.updateUser({
     password: request.password,
@@ -123,7 +123,7 @@ export async function updatePassword(request: UpdatePasswordRequest) {
  * Update a user's profile data
  */
 export async function updateProfile(data: ProfileUpdateData) {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createSupabaseServerClient();
 
   // Get current user
   const {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase/client';
+import { createSupabaseServerClient } from '@/lib/supabase/client';
 import { AUTH_PROVIDERS, type AuthProvider } from '@/lib/supabase/config';
 
 export async function GET(request: NextRequest) {
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
   const callbackUrl = `${url.origin}/auth/callback`;
 
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createSupabaseServerClient();
 
   // Initiate OAuth sign-in
   const { data, error } = await supabase.auth.signInWithOAuth({

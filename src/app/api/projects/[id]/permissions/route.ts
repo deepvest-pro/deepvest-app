@@ -5,15 +5,14 @@ import {
   removeUserFromProject,
   updateUserRole,
 } from '@/lib/supabase/helpers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createSupabaseServerClient } from '@/lib/supabase/client';
 import { permissionSchema } from '@/lib/validations/project';
 import { z } from 'zod';
 
 interface RouteContext {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 /**
@@ -21,20 +20,21 @@ interface RouteContext {
  * Add a user to the project with a specific role
  */
 export async function POST(request: Request, { params }: RouteContext) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = await createSupabaseServerClient();
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { id: projectId } = params;
+  const { id: projectId } = await params;
 
   // Check if user has admin permission for this project
-  const hasAccess = await checkUserProjectRole(session.user.id, projectId, 'admin');
+  const hasAccess = await checkUserProjectRole(user.id, projectId, 'admin');
 
   if (!hasAccess) {
     return NextResponse.json(
@@ -74,20 +74,21 @@ export async function POST(request: Request, { params }: RouteContext) {
  * Update user's role in the project
  */
 export async function PUT(request: Request, { params }: RouteContext) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = await createSupabaseServerClient();
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { id: projectId } = params;
+  const { id: projectId } = await params;
 
   // Check if user has admin permission for this project
-  const hasAccess = await checkUserProjectRole(session.user.id, projectId, 'admin');
+  const hasAccess = await checkUserProjectRole(user.id, projectId, 'admin');
 
   if (!hasAccess) {
     return NextResponse.json(
@@ -130,20 +131,21 @@ export async function PUT(request: Request, { params }: RouteContext) {
  * Remove a user from the project
  */
 export async function DELETE(request: Request, { params }: RouteContext) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = await createSupabaseServerClient();
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { id: projectId } = params;
+  const { id: projectId } = await params;
 
   // Check if user has admin permission for this project
-  const hasAccess = await checkUserProjectRole(session.user.id, projectId, 'admin');
+  const hasAccess = await checkUserProjectRole(user.id, projectId, 'admin');
 
   if (!hasAccess) {
     return NextResponse.json(

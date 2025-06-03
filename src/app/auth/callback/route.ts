@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase/client';
+import { createSupabaseServerClient } from '@/lib/supabase/client';
 
 /**
  * Route handler for Supabase Auth callback
@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get('code');
 
   if (code) {
-    const supabase = await createServerSupabaseClient();
+    const supabase = await createSupabaseServerClient();
     // Exchange the auth code for a session
     await supabase.auth.exchangeCodeForSession(code);
   }

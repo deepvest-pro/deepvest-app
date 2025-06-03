@@ -1,0 +1,167 @@
+'use server';
+
+// import { createServerActionClient } from '@supabase/auth-helpers-nextjs'; // Old helper
+import { revalidatePath } from 'next/cache';
+import { checkUserProjectRole } from '@/lib/supabase/helpers';
+import type { Database } from '@/types/supabase';
+import { createSupabaseServerClient } from '@/lib/supabase/client'; // New client
+
+interface ToggleProjectPublicationArgs {
+  projectId: string;
+  isCurrentlyPublic: boolean;
+  // newSnapshotId is removed as it will be fetched from DB inside the action
+}
+
+export async function toggleProjectPublication({
+  // newSnapshotId removed from params
+  projectId,
+  isCurrentlyPublic,
+}: ToggleProjectPublicationArgs): Promise<{
+  success: boolean;
+  error?: string;
+  isPublic?: boolean;
+}> {
+  console.error(
+    `[Action] toggleProjectPublication called for project ${projectId}. Currently public: ${isCurrentlyPublic}`,
+  );
+
+  try {
+    const supabase = await createSupabaseServerClient();
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error('[Action] User not authenticated:', authError);
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    console.error(`[Action] User authenticated: ${user.id}`);
+
+    // Check permissions directly in the database first
+    const { data: permissionCheck, error: permissionError } = await supabase
+      .from('project_permissions')
+      .select('role')
+      .eq('project_id', projectId)
+      .eq('user_id', user.id)
+      .single();
+
+    console.log(`[Action] Direct permission check result:`, { permissionCheck, permissionError });
+
+    const isOwner = await checkUserProjectRole(user.id, projectId, 'owner');
+    if (!isOwner) {
+      console.warn(`[Action] User ${user.id} is not owner of project ${projectId}.`);
+      return { success: false, error: 'Only the project owner can perform this action' };
+    }
+
+    console.log(`[Action] User ${user.id} is confirmed owner of project ${projectId}`);
+
+    const newPublicStatus = !isCurrentlyPublic;
+    console.log(`[Action] New public status will be: ${newPublicStatus}`);
+
+    const updateData: Partial<Database['public']['Tables']['projects']['Row']> = {
+      is_public: newPublicStatus,
+    };
+
+    if (newPublicStatus) {
+      console.log(
+        '[Action] Attempting to publish. Checking public_snapshot_id and new_snapshot_id...',
+      );
+      const { data: currentProject, error: fetchError } = await supabase
+        .from('projects')
+        .select('public_snapshot_id, new_snapshot_id')
+        .eq('id', projectId)
+        .single();
+
+      if (fetchError) {
+        console.error(`[Action] Error fetching project ${projectId} details:`, fetchError);
+        return { success: false, error: 'Failed to fetch project details for publishing.' };
+      }
+
+      console.log('[Action] Fetched project state:', currentProject);
+
+      if (
+        currentProject &&
+        currentProject.public_snapshot_id === null &&
+        currentProject.new_snapshot_id
+      ) {
+        console.log(
+          `[Action] Conditions met: public_snapshot_id is null, new_snapshot_id (${currentProject.new_snapshot_id}) is not. Updating public_snapshot_id.`,
+        );
+        updateData.public_snapshot_id = currentProject.new_snapshot_id;
+      } else {
+        console.log('[Action] Conditions not met for updating public_snapshot_id:');
+        if (!currentProject) console.log(' - currentProject is null/undefined');
+        if (currentProject?.public_snapshot_id !== null)
+          console.log(` - public_snapshot_id is NOT null (${currentProject?.public_snapshot_id})`);
+        if (!currentProject?.new_snapshot_id)
+          console.log(` - new_snapshot_id is null/undefined (${currentProject?.new_snapshot_id})`);
+      }
+    } else {
+      console.log('[Action] Unpublishing. public_snapshot_id will not be changed.');
+    }
+
+    console.log('[Action] Final updateData to be sent to Supabase:', updateData);
+
+    // First, let's check current project state before update
+    const { data: beforeUpdate, error: beforeError } = await supabase
+      .from('projects')
+      .select('is_public, public_snapshot_id, new_snapshot_id')
+      .eq('id', projectId)
+      .single();
+
+    console.log('[Action] Project state before update:', { beforeUpdate, beforeError });
+
+    // Perform the update
+    const { error: updateError } = await supabase
+      .from('projects')
+      .update(updateData)
+      .eq('id', projectId);
+
+    if (updateError) {
+      console.error(`[Action] Supabase update error for project ${projectId}:`, updateError);
+      return { success: false, error: updateError.message };
+    }
+
+    console.log(
+      `[Action] Project ${projectId} successfully updated to is_public: ${newPublicStatus}`,
+    );
+
+    // Verify the update was successful by fetching the project again
+    const { data: verificationProject, error: verificationError } = await supabase
+      .from('projects')
+      .select('is_public')
+      .eq('id', projectId)
+      .single();
+
+    if (verificationError) {
+      console.warn(`[Action] Could not verify update for project ${projectId}:`, verificationError);
+      // Don't fail the action if verification fails, as the update might have succeeded
+    } else if (verificationProject && verificationProject.is_public !== newPublicStatus) {
+      console.error(
+        `[Action] Update verification failed. Expected: ${newPublicStatus}, Got: ${verificationProject.is_public}`,
+      );
+      return { success: false, error: 'Update verification failed' };
+    } else {
+      console.log(
+        `[Action] Update verified successfully. Project is_public: ${verificationProject?.is_public}`,
+      );
+    }
+
+    console.log(`[Action] Update verified successfully. Revalidating paths...`);
+
+    // Revalidate paths
+    revalidatePath(`/projects/${projectId}`);
+    revalidatePath('/projects');
+    revalidatePath('/profile');
+
+    console.log(`[Action] Paths revalidated. Returning success with isPublic: ${newPublicStatus}`);
+
+    return { success: true, isPublic: newPublicStatus };
+  } catch (error) {
+    console.error('[Action] Unexpected error in toggleProjectPublication:', error);
+    return { success: false, error: 'An unexpected error occurred' };
+  }
+}

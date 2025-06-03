@@ -1,16 +1,16 @@
 import { getProjectWithDetails } from '@/lib/supabase/helpers';
 import { notFound } from 'next/navigation';
-import { getCurrentUser, createServerSupabaseClient } from '@/lib/supabase/client';
-import { checkUserProjectRole } from '@/lib/supabase/helpers';
+import { getCurrentUser } from '@/lib/supabase/client';
+import { checkUserProjectRole, getProjectCoreStatus } from '@/lib/supabase/helpers';
 import { ProjectDetails } from '@/components/projects/ProjectDetails';
 import { ExclamationTriangleIcon, EyeClosedIcon } from '@radix-ui/react-icons';
 
 export const dynamic = 'force-dynamic';
 
 interface ProjectPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export async function generateMetadata({ params: paramsPromise }: ProjectPageProps) {
@@ -41,20 +41,9 @@ export default async function ProjectPage({ params: paramsPromise }: ProjectPage
   const params = await paramsPromise;
   const { id } = params;
   const user = await getCurrentUser();
-  const supabase = await createServerSupabaseClient();
 
-  // 1. Check project existence and public status using RPC
-  const { data: projectStatusResult, error: rpcError } = await supabase.rpc(
-    'get_project_status_by_id',
-    { p_project_id: id },
-  );
-
-  // supabase.rpc can return data in a different shape, ensure it's an array for projectStatus
-  const projectStatusArray = Array.isArray(projectStatusResult)
-    ? projectStatusResult
-    : projectStatusResult?.data
-      ? [projectStatusResult.data]
-      : [];
+  // 1. Check project existence and public status using the helper function
+  const { data: projectStatusArray, error: rpcError } = await getProjectCoreStatus(id);
 
   if (rpcError || !projectStatusArray || projectStatusArray.length === 0) {
     console.error(

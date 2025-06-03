@@ -7,11 +7,11 @@ import type {
   UpdatePasswordRequest,
   ProfileUpdateData,
 } from '../validations/auth';
-import { createServerSupabaseClient } from '../supabase/client';
+import { createSupabaseServerClient } from '../supabase/client';
 
 export async function signIn(credentials: SignInCredentials) {
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = await createSupabaseServerClient();
 
     const { error } = await supabase.auth.signInWithPassword({
       email: credentials.email,
@@ -31,7 +31,7 @@ export async function signIn(credentials: SignInCredentials) {
 
 export async function signUp(credentials: SignUpCredentials) {
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = await createSupabaseServerClient();
 
     const { error } = await supabase.auth.signUp({
       email: credentials.email,
@@ -57,7 +57,7 @@ export async function signUp(credentials: SignUpCredentials) {
 
 export async function signOut() {
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = await createSupabaseServerClient();
 
     const { error } = await supabase.auth.signOut();
 
@@ -74,7 +74,7 @@ export async function signOut() {
 
 export async function resetPassword(request: ResetPasswordRequest) {
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = await createSupabaseServerClient();
 
     const { error } = await supabase.auth.resetPasswordForEmail(request.email, {
       redirectTo: `${process.env.APP_URL}/auth/reset-password`,
@@ -93,7 +93,7 @@ export async function resetPassword(request: ResetPasswordRequest) {
 
 export async function updatePassword(request: UpdatePasswordRequest) {
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = await createSupabaseServerClient();
 
     const { error } = await supabase.auth.updateUser({
       password: request.password,
@@ -112,7 +112,7 @@ export async function updatePassword(request: UpdatePasswordRequest) {
 
 export async function updateProfile(profileData: ProfileUpdateData) {
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = await createSupabaseServerClient();
 
     const {
       data: { user },

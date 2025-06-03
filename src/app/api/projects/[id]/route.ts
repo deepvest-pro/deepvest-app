@@ -1,15 +1,13 @@
 import { NextResponse } from 'next/server';
 import { checkUserProjectRole, getProjectWithDetails, updateProject } from '@/lib/supabase/helpers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createSupabaseServerClient } from '@/lib/supabase/client';
 import { updateProjectSchema } from '@/lib/validations/project';
 import { z } from 'zod';
-import type { Database } from '@/types/supabase';
 
 interface RouteContext {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 /**
@@ -17,14 +15,13 @@ interface RouteContext {
  * Get a specific project with permissions and snapshots
  */
 export async function GET(request: Request, { params }: RouteContext) {
-  const cookieStore = cookies();
-  const supabase = createRouteHandlerClient<Database>({ cookies: () => cookieStore });
+  const supabase = await createSupabaseServerClient();
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  const { id } = params;
+  const { id } = await params;
 
   // 1. Check project existence and public status using RPC
   const { data: projectStatusData, error: rpcError } = await supabase.rpc(
@@ -47,8 +44,8 @@ export async function GET(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: 'Project has been archived' }, { status: 410 }); // 410 Gone
   }
 
-  // 2. If project is not public and user is a guest (no session), return 403
-  if (!isPublic && !session) {
+  // 2. If project is not public and user is a guest (no user), return 403
+  if (!isPublic && !user) {
     return NextResponse.json(
       { error: 'This project is private. Please sign in to check your access.' },
       { status: 403 },
@@ -56,8 +53,8 @@ export async function GET(request: Request, { params }: RouteContext) {
   }
 
   // 3. If user is authenticated, check their specific role
-  if (session) {
-    const hasViewerAccess = await checkUserProjectRole(session.user.id, id, 'viewer');
+  if (user) {
+    const hasViewerAccess = await checkUserProjectRole(user.id, id, 'viewer');
     if (!hasViewerAccess && !isPublic) {
       // Authenticated user, project is private, and user doesn't have even viewer access
       return NextResponse.json(
@@ -90,20 +87,20 @@ export async function GET(request: Request, { params }: RouteContext) {
  * Update a specific project
  */
 export async function PUT(request: Request, { params }: RouteContext) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = await createSupabaseServerClient();
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { id } = params;
+  const { id } = await params;
 
   // Check if user has at least editor permission for this project
-  const hasAccess = await checkUserProjectRole(session.user.id, id, 'editor');
+  const hasAccess = await checkUserProjectRole(user.id, id, 'editor');
 
   if (!hasAccess) {
     return NextResponse.json(
@@ -140,20 +137,20 @@ export async function PUT(request: Request, { params }: RouteContext) {
  * Delete a project (only available to project owner)
  */
 export async function DELETE(request: Request, { params }: RouteContext) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = await createSupabaseServerClient();
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { id } = params;
+  const { id } = await params;
 
   // Check if user is owner of this project
-  const isOwner = await checkUserProjectRole(session.user.id, id, 'owner');
+  const isOwner = await checkUserProjectRole(user.id, id, 'owner');
 
   if (!isOwner) {
     return NextResponse.json(

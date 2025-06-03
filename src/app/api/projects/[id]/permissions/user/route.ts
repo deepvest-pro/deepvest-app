@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createSupabaseServerClient } from '@/lib/supabase/client';
 
 interface RouteContext {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 /**
@@ -13,24 +12,25 @@ interface RouteContext {
  * Get the current user's role in the project
  */
 export async function GET(request: Request, { params }: RouteContext) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = await createSupabaseServerClient();
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { id: projectId } = params;
+  const { id: projectId } = await params;
 
   // Get the current user's permissions for this project
   const { data, error } = await supabase
     .from('project_permissions')
     .select('role')
     .eq('project_id', projectId)
-    .eq('user_id', session.user.id)
+    .eq('user_id', user.id)
     .single();
 
   if (error) {

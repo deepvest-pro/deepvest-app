@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
 import { checkUserProjectRole } from '@/lib/supabase/helpers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createSupabaseServerClient } from '@/lib/supabase/client';
 
 interface RouteContext {
-  params: {
+  params: Promise<{
     id: string;
     snapshotId: string;
-  };
+  }>;
 }
 
 /**
@@ -15,20 +14,21 @@ interface RouteContext {
  * Get a specific snapshot
  */
 export async function GET(request: Request, { params }: RouteContext) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = await createSupabaseServerClient();
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { id: projectId, snapshotId } = params;
+  const { id: projectId, snapshotId } = await params;
 
   // Check if user has at least viewer permission for this project
-  const hasAccess = await checkUserProjectRole(session.user.id, projectId, 'viewer');
+  const hasAccess = await checkUserProjectRole(user.id, projectId, 'viewer');
 
   if (!hasAccess) {
     return NextResponse.json(
@@ -37,10 +37,10 @@ export async function GET(request: Request, { params }: RouteContext) {
     );
   }
 
-  // Get the specific snapshot
-  const { data, error } = await supabase
+  // Get the specific snapshot (raw data first)
+  const { data: rawSnapshot, error } = await supabase
     .from('snapshots')
-    .select('*, author_id(id, full_name, nickname, avatar_url)')
+    .select('*')
     .eq('id', snapshotId)
     .eq('project_id', projectId) // Ensure the snapshot belongs to the specified project
     .single();
@@ -52,7 +52,30 @@ export async function GET(request: Request, { params }: RouteContext) {
     );
   }
 
-  return NextResponse.json({ snapshot: data });
+  // Fetch author profile separately to avoid schema cache issues
+  let authorProfile = null;
+  if (rawSnapshot.author_id) {
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('id, full_name, nickname, avatar_url')
+      .eq('id', rawSnapshot.author_id)
+      .single();
+
+    if (profile) {
+      authorProfile = {
+        id: profile.id,
+        email: undefined,
+        user_profiles: profile,
+      };
+    }
+  }
+
+  const snapshotWithAuthor = {
+    ...rawSnapshot,
+    author_id: authorProfile || rawSnapshot.author_id,
+  };
+
+  return NextResponse.json({ snapshot: snapshotWithAuthor });
 }
 
 /**
@@ -60,20 +83,21 @@ export async function GET(request: Request, { params }: RouteContext) {
  * Update a specific snapshot (if not locked)
  */
 export async function PUT(request: Request, { params }: RouteContext) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const supabase = await createSupabaseServerClient();
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { id: projectId, snapshotId } = params;
+  const { id: projectId, snapshotId } = await params;
 
   // Check if user has at least editor permission for this project
-  const hasAccess = await checkUserProjectRole(session.user.id, projectId, 'editor');
+  const hasAccess = await checkUserProjectRole(user.id, projectId, 'editor');
 
   if (!hasAccess) {
     return NextResponse.json(

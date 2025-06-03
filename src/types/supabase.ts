@@ -126,7 +126,8 @@ type SnapshotUpdate = Partial<SnapshotRow>;
 // Project permissions fields
 type ProjectPermissionFields = {
   project_id: UUID;
-  user_id: UUID | ExpandedUser;
+  user_id: UUID;
+  user_details?: ExpandedUser | null;
   role: ProjectRole;
 };
 

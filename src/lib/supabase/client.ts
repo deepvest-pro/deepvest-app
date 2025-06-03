@@ -1,201 +1,97 @@
 'use server';
 
 import { cookies } from 'next/headers';
-import { createClient } from '@supabase/supabase-js';
+// import { createClient } from '@supabase/supabase-js'; // No longer used directly
+// import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'; // Old helper
+import { createServerClient } from '@supabase/ssr'; // New helper from @supabase/ssr
 import type { Database } from '@/types/supabase';
 import type { UserData } from '@/types/auth';
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
 
 /**
- * Creates a Supabase client for server components and server actions
- * Uses private environment variables (without the NEXT_PUBLIC_ prefix)
+ * Creates a Supabase client for server components (pages, layouts, server actions).
+ * This client is primarily for reading session and data.
+ * Uses createServerClient from @supabase/ssr for proper Next.js integration.
  */
-export async function createServerSupabaseClient() {
-  let cookieStore;
-
-  try {
-    cookieStore = await cookies();
-  } catch {
-    console.debug(
-      'Unable to access cookie store during server-side client creation, using memory storage instead.',
-    );
-    // Fallback for contexts where cookies() are not available
-    const memoryStore = new Map<string, string>();
-
-    // Return client with memory storage
-    return createClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-      {
-        auth: {
-          persistSession: false, // Don't try to save session, we don't have access to cookies
-          flowType: 'pkce',
-          autoRefreshToken: false,
-          detectSessionInUrl: true,
-          storage: {
-            getItem: key => memoryStore.get(key) || null,
-            setItem: (key, value) => {
-              memoryStore.set(key, value);
-            },
-            removeItem: key => {
-              memoryStore.delete(key);
-            },
-          },
+export async function createSupabaseServerClient() {
+  const cookieStore = await cookies();
+  return createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
         },
-      },
-    );
-  }
-
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const supabaseKey =
-    process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
-  if (!supabaseUrl || !supabaseKey) {
-    console.error('Missing Supabase environment variables');
-    throw new Error('Missing Supabase environment variables');
-  }
-
-  return createClient<Database>(supabaseUrl, supabaseKey, {
-    auth: {
-      persistSession: true,
-      flowType: 'pkce',
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-      storage: {
-        getItem: (key: string) => {
+        setAll(cookiesToSet) {
           try {
-            const cookie = cookieStore.get(key);
-
-            // Verify token integrity if it's an access token
-            if ((key === 'sb-access-token' || key === 'sb-refresh-token') && cookie?.value) {
-              const token = cookie.value;
-
-              // Basic JWT validation
-              const parts = token.split('.');
-              if (parts.length !== 3) {
-                console.error(`Invalid token format for ${key}`);
-                return null;
-              }
-
+            cookiesToSet.forEach(({ name, value, options }) => {
               try {
-                // Check expiration
-                const payload = JSON.parse(atob(parts[1]));
-                const now = Math.floor(Date.now() / 1000);
-
-                // If token is expired, don't return it
-                if (typeof payload.exp === 'number' && payload.exp <= now) {
-                  console.error(`Expired token found for ${key}`);
-                  return null;
-                }
-
-                // If expiration time is unreasonably far in the future, don't accept it
-                if (typeof payload.exp === 'number' && payload.exp > now + 1209600) {
-                  // 2 weeks
-                  console.error(`Suspicious token expiration for ${key}`);
-                  return null;
-                }
-              } catch (e) {
-                console.error(`Error parsing token for ${key}:`, e);
-                return null;
+                cookieStore.set(name, value, options);
+              } catch {
+                // Individual cookie setting failed - this is expected in Server Components
+                // and can be safely ignored as middleware handles session refresh
               }
-            }
-
-            return cookie?.value ?? null;
-          } catch (error) {
-            console.error(`Error getting cookie ${key}:`, error);
-            return null;
-          }
-        },
-        setItem: (key: string, value: string) => {
-          try {
-            cookieStore.set(key, value, {
-              path: '/',
-              httpOnly: true,
-              sameSite: 'lax',
-              secure: process.env.NODE_ENV === 'production',
-              maxAge: 60 * 60 * 24 * 7, // 7 days
             });
-          } catch (error) {
-            const err = error instanceof Error ? error : new Error(String(error));
-            if (
-              err.message.includes(
-                'Cookies can only be modified in a Server Action or Route Handler',
-              )
-            ) {
-              console.debug(
-                `Cookie set operation for "${key}" skipped in current Next.js context: ${err.message}`,
-              );
-            } else {
-              console.warn(`Unable to set cookie ${key}: ${err.message}`);
-            }
-          }
-        },
-        removeItem: (key: string) => {
-          try {
-            cookieStore.set(key, '', {
-              path: '/',
-              maxAge: 0,
-              httpOnly: true,
-              sameSite: 'lax',
-              secure: process.env.NODE_ENV === 'production',
-            });
-          } catch (error) {
-            const err = error instanceof Error ? error : new Error(String(error));
-            if (
-              err.message.includes(
-                'Cookies can only be modified in a Server Action or Route Handler',
-              )
-            ) {
-              console.debug(
-                `Cookie remove operation for "${key}" skipped in current Next.js context: ${err.message}`,
-              );
-            } else {
-              console.warn(`Unable to remove cookie ${key}: ${err.message}`);
-            }
+          } catch {
+            // The `setAll` method was called from a Server Component.
+            // This is expected behavior and can be safely ignored
+            // as middleware handles session refresh
           }
         },
       },
     },
-  });
+  );
 }
+
+/*
+/**
+ * Creates a Supabase client with custom cookie storage logic.
+ * This might be more suitable for contexts like Route Handlers or specific scenarios
+ * where direct cookie manipulation (get/set/remove) is needed and auth-helpers defaults are insufficient.
+ * CAUTION: Prone to issues like "cookies() should be awaited" if cookieStore is not handled carefully.
+ */
+/*
+// Commented out as it was causing issues and is replaced by createSupabaseServerClient from @supabase/ssr
+export async function createServerSupabaseClientWithCustomStorage() {
+  // ...
+}
+*/
 
 /**
  * Get current user
  */
 export async function getCurrentUser() {
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = await createSupabaseServerClient(); // Uses the new @supabase/ssr client
     const { data, error } = await supabase.auth.getUser();
 
     if (error || !data?.user) {
+      // console.warn('[getCurrentUser] No user found or error:', error?.message);
       return null;
     }
 
     return data.user;
   } catch (error) {
-    console.error('Error getting current user:', error);
+    console.error('[getCurrentUser] Error getting current user:', error);
     return null;
   }
 }
 
 /**
- * Get current session
+ * Get current session (DEPRECATED - use getCurrentUser instead for security)
+ * This function is deprecated and should not be used in new code.
+ * Use getCurrentUser() instead which validates the user with the auth server.
  */
 export async function getCurrentSession() {
-  try {
-    const supabase = await createServerSupabaseClient();
-    const { data, error } = await supabase.auth.getSession();
+  console.warn(
+    '[getCurrentSession] DEPRECATED: This function is deprecated for security reasons. Use getCurrentUser() instead.',
+  );
 
-    if (error || !data?.session) {
-      return null;
-    }
-
-    return data.session;
-  } catch (error) {
-    console.error('Error getting current session:', error);
-    return null;
-  }
+  // For security reasons, we no longer return session data from server-side code
+  // Client-side code should use Supabase client hooks instead
+  return null;
 }
 
 /**
@@ -203,11 +99,12 @@ export async function getCurrentSession() {
  */
 export async function getUserWithProfile(): Promise<UserData | null> {
   try {
-    const supabase = await createServerSupabaseClient();
+    const supabase = await createSupabaseServerClient(); // Uses the new @supabase/ssr client
 
     const { data: userData, error: userError } = await supabase.auth.getUser();
 
     if (userError || !userData?.user) {
+      // console.warn('[getUserWithProfile] No user found or error during getUser:', userError?.message);
       return null;
     }
 
@@ -218,7 +115,9 @@ export async function getUserWithProfile(): Promise<UserData | null> {
       .single<UserProfile>();
 
     if (profileError && profileError.code !== 'PGRST116') {
-      console.error('Error fetching profile:', profileError);
+      // PGRST116 means no rows found, which is acceptable if profile doesn't exist yet
+      console.error('[getUserWithProfile] Error fetching profile:', profileError);
+      // Decide if you want to return null or user without profile here
     }
 
     const profile: UserProfile | null = data
@@ -247,7 +146,7 @@ export async function getUserWithProfile(): Promise<UserData | null> {
       profile,
     };
   } catch (error) {
-    console.error('Error getting user with profile:', error);
+    console.error('[getUserWithProfile] Error getting user with profile:', error);
     return null;
   }
 }
