@@ -34,30 +34,30 @@
 
 ## Multi-step Project Creation Form
 
-- [ ] Design form architecture
-  - [ ] Create step-by-step form structure
-  - [ ] Implement form state management
-  - [ ] Add progress tracking and navigation
-  - [ ] Set up validation for each step
-  - [ ] Integrate Radix UI Toast component for form notifications
-- [ ] Build project info step
-  - [ ] Create title and basic information fields
+- [x] Design form architecture
+  - [x] Create step-by-step form structure
+  - [x] Implement form state management
+  - [x] Add progress tracking and navigation
+  - [x] Set up validation for each step
+  - [x] Integrate Radix UI Toast component for form notifications
+- [x] Build project info step
+  - [x] Create title and basic information fields
   - [ ] Implement description field with rich text
-  - [ ] Add category and tag selection
-  - [ ] Create validation for first step
-  - [ ] Add toast notifications for step completion
-- [ ] Implement funding/details step
-  - [ ] Add funding goal and currency fields
-  - [ ] Create timeline selection components
-  - [ ] Implement milestone creation interface
-  - [ ] Add validation for financial information
-  - [ ] Display toast notifications for financial information validation
-- [ ] Create team and collaboration step
-  - [ ] Design team member assignment interface
-  - [ ] Implement role selection for team members
-  - [ ] Add ability to invite new members
-  - [ ] Create validation for team composition
-  - [ ] Show toast notifications for member invitations
+  - [x] Add category and tag selection
+  - [x] Create validation for first step
+  - [x] Add toast notifications for step completion
+- [x] Implement funding/details step
+  - [x] Add funding goal and currency fields
+  - [x] Create timeline selection components
+  - [x] Implement milestone creation interface
+  - [x] Add validation for financial information
+  - [x] Display toast notifications for financial information validation
+- [x] Create team and collaboration step
+  - [x] Design team member assignment interface
+  - [x] Implement role selection for team members
+  - [x] Add ability to invite new members
+  - [x] Create validation for team composition
+  - [x] Show toast notifications for member invitations
 
 ## Draft Mode and Status Management
 
@@ -74,7 +74,7 @@
   - [x] Create permissions for status changes
   - [x] Show toast notifications for status changes
 - [ ] Implement project listing with filters (deferred to future task)
-  - [ ] Design projects list view
+  - [x] Design projects list view
   - [ ] Add status filters and sorting
   - [ ] Implement pagination for project lists
   - [ ] Create "My Drafts" section for users
