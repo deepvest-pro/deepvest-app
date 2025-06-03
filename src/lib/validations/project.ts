@@ -27,6 +27,44 @@ export const generateSlug = (text: string): string => {
 };
 
 /**
+ * Generates a unique slug by checking availability via API
+ * @param baseName The base name to generate slug from
+ * @returns Promise<string> A unique slug
+ */
+export const generateUniqueSlug = async (baseName: string): Promise<string> => {
+  const baseSlug = generateSlug(baseName);
+  let finalSlug = baseSlug;
+  let counter = 1;
+
+  // Keep checking until we find an available slug
+  while (true) {
+    const response = await fetch(`/api/projects/check-slug?slug=${encodeURIComponent(finalSlug)}`);
+
+    if (!response.ok) {
+      // If check fails, just use the original slug and let the API handle the error
+      console.warn('Failed to check slug availability, using original slug');
+      return baseSlug;
+    }
+
+    const result = await response.json();
+
+    if (result.available) {
+      return finalSlug;
+    }
+
+    // Slug is taken, try with a number suffix
+    finalSlug = `${baseSlug}-${counter}`;
+    counter++;
+
+    // Safety check to prevent infinite loop
+    if (counter > 100) {
+      console.warn('Too many slug attempts, using timestamp suffix');
+      return `${baseSlug}-${Date.now()}`;
+    }
+  }
+};
+
+/**
  * Schema for creating a new project
  */
 export const createProjectSchema = z.object({
@@ -139,7 +177,7 @@ export type SnapshotForm = z.infer<typeof snapshotSchema>;
  */
 export const permissionSchema = z.object({
   email: z.string().email({ message: 'Must be a valid email address' }),
-  role: z.enum(['viewer', 'editor', 'admin']),
+  role: z.enum(['viewer', 'editor', 'admin', 'owner']),
 });
 
 /**

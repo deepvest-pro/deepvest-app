@@ -571,28 +571,17 @@ export async function publishSnapshot(projectId: string, snapshotId: string) {
 }
 
 /**
- * Adds a user to a project with a specific role
+ * Adds a user to a project by user ID (not email)
  */
-export async function addUserToProject(projectId: string, userEmail: string, role: ProjectRole) {
+export async function addUserToProjectById(projectId: string, userId: string, role: ProjectRole) {
   const supabase = await createSupabaseServerClient();
-
-  // First, find the user by email
-  const { data: userData, error: userError } = await supabase
-    .from('user_profiles')
-    .select('id')
-    .eq('id', (await supabase.from('auth').select('id').eq('email', userEmail).single()).data?.id)
-    .single();
-
-  if (userError || !userData) {
-    return { error: userError?.message || 'User not found', success: false };
-  }
 
   // Check if the user already has a role in this project
   const { data: existingRole, error: roleError } = await supabase
     .from('project_permissions')
     .select('*')
     .eq('project_id', projectId)
-    .eq('user_id', userData.id)
+    .eq('user_id', userId)
     .maybeSingle();
 
   if (roleError && roleError.code !== 'PGRST116') {
@@ -613,7 +602,7 @@ export async function addUserToProject(projectId: string, userEmail: string, rol
     // Add a new role
     const { error: insertError } = await supabase.from('project_permissions').insert({
       project_id: projectId,
-      user_id: userData.id,
+      user_id: userId,
       role,
     });
 
@@ -819,4 +808,25 @@ export async function getProjectCoreStatus(projectId: string): Promise<{
     data: projectStatusArray as { is_public: boolean; is_archived: boolean }[],
     error: null,
   };
+}
+
+/**
+ * Adds a user to a project with a specific role (by email)
+ */
+export async function addUserToProject(projectId: string, userEmail: string, role: ProjectRole) {
+  const supabase = await createSupabaseServerClient();
+
+  // First, find the user by email
+  const { data: userData, error: userError } = await supabase
+    .from('user_profiles')
+    .select('id')
+    .eq('id', (await supabase.from('auth').select('id').eq('email', userEmail).single()).data?.id)
+    .single();
+
+  if (userError || !userData) {
+    return { error: userError?.message || 'User not found', success: false };
+  }
+
+  // Use the new function to add user by ID
+  return await addUserToProjectById(projectId, userData.id, role);
 }
