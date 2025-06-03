@@ -2,31 +2,31 @@
 
 ## Database Schema and Validation
 
-- [ ] Design project database schema
-  - [ ] Define required project fields (title, description, etc.)
-  - [ ] Create relationships with users and other entities
-  - [ ] Set up status field with enum types (draft, published, etc.)
-  - [ ] Add timestamps for creation/modification tracking
-- [ ] Implement Row Level Security (RLS)
-  - [ ] Create policies for project visibility
-  - [ ] Set up policies for edit/delete permissions
-  - [ ] Implement ownership/collaboration rules
-- [ ] Create validation schema
-  - [ ] Define Zod schemas for project data
-  - [ ] Add validation for required fields
-  - [ ] Implement custom validation rules for project data
-  - [ ] Create validation for URL slugs and unique identifiers
+- [x] Design project database schema
+  - [x] Define required project fields (title, description, etc.)
+  - [x] Create relationships with users and other entities
+  - [x] Set up status field with enum types (draft, published, etc.)
+  - [x] Add timestamps for creation/modification tracking
+- [x] Implement Row Level Security (RLS)
+  - [x] Create policies for project visibility
+  - [x] Set up policies for edit/delete permissions
+  - [x] Implement ownership/collaboration rules
+- [x] Create validation schema
+  - [x] Define Zod schemas for project data
+  - [x] Add validation for required fields
+  - [x] Implement custom validation rules for project data
+  - [x] Create validation for URL slugs and unique identifiers
 
 ## Role-Based Access Control Implementation
 
-- [ ] Design roles and permissions system
-  - [ ] Create roles table with project relationship
-  - [ ] Define permission types and granularity
-  - [ ] Establish role hierarchy if applicable
-  - [ ] Set up default roles (owner, editor, viewer, etc.)
-- [ ] Implement permissions management
-  - [ ] Create API endpoints for role assignment
-  - [ ] Implement permission checking utilities
+- [x] Design roles and permissions system
+  - [x] Create roles table with project relationship
+  - [x] Define permission types and granularity
+  - [x] Establish role hierarchy if applicable
+  - [x] Set up default roles (owner, editor, viewer, etc.)
+- [x] Implement permissions management
+  - [x] Create API endpoints for role assignment
+  - [x] Implement permission checking utilities
   - [ ] Add middleware for permission verification
   - [ ] Create helpers for conditional UI rendering
 - [ ] Build role assignment interface

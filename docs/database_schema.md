@@ -73,18 +73,99 @@ Extends the built-in auth.users with application-specific profile information.
 - UPDATE: Users can only update their own profile
 - DELETE: Users can only delete their own profile
 
+### `public.projects`
+
+Main table to store projects created by users.
+
+| Column             | Type      | Description                             | Constraints                                 |
+| ------------------ | --------- | --------------------------------------- | ------------------------------------------- |
+| id                 | UUID      | Primary key                             | PRIMARY KEY, DEFAULT gen_random_uuid()      |
+| created_at         | TIMESTAMP | When the project was created            | NOT NULL, DEFAULT NOW()                     |
+| updated_at         | TIMESTAMP | When the project was last updated       | NOT NULL, DEFAULT NOW()                     |
+| slug               | TEXT      | Unique slug for URL                     | NOT NULL, UNIQUE                            |
+| public_snapshot_id | UUID      | Reference to the public snapshot        | REFERENCES snapshots(id) ON DELETE SET NULL |
+| new_snapshot_id    | UUID      | Reference to the working draft snapshot | REFERENCES snapshots(id) ON DELETE SET NULL |
+| is_public          | BOOLEAN   | Whether the project is publicly visible | NOT NULL, DEFAULT false                     |
+| is_demo            | BOOLEAN   | Whether it's a demo project             | NOT NULL, DEFAULT false                     |
+| is_archived        | BOOLEAN   | Whether the project is archived         | NOT NULL, DEFAULT false                     |
+
+**Policies**:
+
+- SELECT: Public projects are viewable by everyone
+- SELECT: Users with permissions on a project can view it
+- UPDATE: Users with editor, admin, or owner role can update projects
+- DELETE: Only users with owner role can delete projects
+- UPDATE to is_public: Only users with owner role can change publicity status
+
+### `public.snapshots`
+
+Stores different versions of project content.
+
+| Column          | Type                | Description                        | Constraints                                         |
+| --------------- | ------------------- | ---------------------------------- | --------------------------------------------------- |
+| id              | UUID                | Primary key                        | PRIMARY KEY, DEFAULT gen_random_uuid()              |
+| created_at      | TIMESTAMP           | When the snapshot was created      | NOT NULL, DEFAULT NOW()                             |
+| updated_at      | TIMESTAMP           | When the snapshot was last updated | NOT NULL, DEFAULT NOW()                             |
+| project_id      | UUID                | Foreign key to projects            | NOT NULL, REFERENCES projects(id) ON DELETE CASCADE |
+| version         | INTEGER             | Sequential version number          | NOT NULL                                            |
+| name            | TEXT                | Project name in this snapshot      | NOT NULL                                            |
+| slogan          | TEXT                | Short tagline for the project      | NULL allowed                                        |
+| description     | TEXT                | Detailed project description       | NOT NULL                                            |
+| status          | project_status_enum | Current project stage              | NOT NULL (enum of project stages)                   |
+| country         | TEXT                | Project's country                  | NULL allowed                                        |
+| city            | TEXT                | Project's city                     | NULL allowed                                        |
+| repository_urls | TEXT[]              | Array of repository URLs           | NULL allowed                                        |
+| website_urls    | TEXT[]              | Array of website URLs              | NULL allowed                                        |
+| logo_url        | TEXT                | URL to project logo                | NULL allowed                                        |
+| banner_url      | TEXT                | URL to project banner              | NULL allowed                                        |
+| video_urls      | TEXT[]              | Array of video URLs                | NULL allowed                                        |
+| author_id       | UUID                | User who created this snapshot     | NOT NULL, REFERENCES auth.users(id)                 |
+| is_locked       | BOOLEAN             | Whether the snapshot is locked     | NOT NULL, DEFAULT false                             |
+
+**Policies**:
+
+- SELECT: Public snapshots (published versions) are viewable by everyone
+- SELECT: Users with permissions on a project can view its snapshots
+- INSERT: Users with editor, admin, or owner role can create snapshots
+- UPDATE: Only unlocked snapshots can be updated by users with editor+ role
+- UPDATE to is_locked: Only owners can lock/unlock snapshots
+
 ### `public.project_permissions`
 
 Controls access to projects.
 
-| Column     | Type      | Description                                  | Constraints             |
-| ---------- | --------- | -------------------------------------------- | ----------------------- |
-| id         | UUID      | Primary key                                  | PRIMARY KEY             |
-| created_at | TIMESTAMP | When the permission was created              | NOT NULL, DEFAULT NOW() |
-| updated_at | TIMESTAMP | When the permission was last updated         | NOT NULL, DEFAULT NOW() |
-| project_id | UUID      | References projects.id                       | NOT NULL                |
-| user_id    | UUID      | References auth.users.id                     | NOT NULL                |
-| role       | TEXT      | One of: 'viewer', 'editor', 'admin', 'owner' | NOT NULL                |
+| Column     | Type              | Description                                  | Constraints                                           |
+| ---------- | ----------------- | -------------------------------------------- | ----------------------------------------------------- |
+| id         | UUID              | Primary key                                  | PRIMARY KEY, DEFAULT gen_random_uuid()                |
+| created_at | TIMESTAMP         | When the permission was created              | NOT NULL, DEFAULT NOW()                               |
+| updated_at | TIMESTAMP         | When the permission was last updated         | NOT NULL, DEFAULT NOW()                               |
+| project_id | UUID              | References projects.id                       | NOT NULL, REFERENCES projects(id) ON DELETE CASCADE   |
+| user_id    | UUID              | References auth.users.id                     | NOT NULL, REFERENCES auth.users(id) ON DELETE CASCADE |
+| role       | project_role_enum | One of: 'viewer', 'editor', 'admin', 'owner' | NOT NULL                                              |
+
+**Policies**:
+
+- SELECT: Users can view their own permissions
+- SELECT: Admins and owners can view all permissions for their projects
+- ALL: Owners can manage all permissions for their projects
+
+## Enums
+
+### `project_status_enum`
+
+Defines possible project stages:
+
+```
+'idea', 'concept', 'prototype', 'mvp', 'beta', 'launched', 'growing', 'scaling', 'established', 'acquired', 'closed'
+```
+
+### `project_role_enum`
+
+Defines permission roles:
+
+```
+'viewer', 'editor', 'admin', 'owner'
+```
 
 ## Functions and Triggers
 
@@ -104,7 +185,7 @@ Automatically creates a user profile when a new user registers in auth.users.
 
 Updates the updated_at timestamp whenever a record is updated.
 
-**Trigger**: `update_user_profiles_updated_at` (BEFORE UPDATE ON user_profiles)
+**Trigger**: Applied to all tables with updated_at columns.
 
 ### `public.is_nickname_available(nickname TEXT)`
 
@@ -112,15 +193,48 @@ Checks if a nickname is already taken.
 
 **Returns**: BOOLEAN
 
+### `public.create_project(p_name TEXT, p_slug TEXT, p_description TEXT, p_status project_status_enum)`
+
+Creates a new project with an initial snapshot and assigns the current user as owner.
+
+**Returns**: UUID (the new project ID)
+
+**Actions**:
+
+- Creates a new project with the given slug
+- Creates the first snapshot (version 1) with provided details
+- Sets the snapshot as the new_snapshot_id for the project
+- Assigns the current user the 'owner' role for the project
+
 ## Row Level Security Policies
 
-DeepVest uses Row Level Security (RLS) to control access to data at the database level.
+DeepVest uses Row Level Security (RLS) to control access to data at the database level. Key policies include:
 
 ### user_profiles policies:
 
-- `Profiles are viewable by everyone`: Anyone can view any profile
-- `Users can update their own profile`: Users can only update their own profile
-- `Users can delete their own profile`: Users can only delete their own profile
+- Anyone can view any profile
+- Users can only update their own profile
+- Users can only delete their own profile
+
+### projects policies:
+
+- Public projects are viewable by everyone
+- Users with permissions can view their projects
+- Only users with appropriate role can modify projects
+- Only owners can delete projects or change publicity status
+
+### snapshots policies:
+
+- Public snapshots are viewable by everyone
+- Users with project permissions can view snapshots
+- Only editors, admins, and owners can create or edit snapshots
+- Only owners can lock/unlock snapshots
+
+### project_permissions policies:
+
+- Users can view their own permissions
+- Admins and owners can view all permissions for their projects
+- Only owners can manage permissions
 
 ## How to Extend the Schema
 

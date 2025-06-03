@@ -11,7 +11,7 @@ type TableDefinition<Row, Insert = Row, Update = Partial<Row>> = {
   Update: Update;
 };
 
-// Define common table row fields
+// Define common table fields
 type CommonTableFields = {
   id: UUID;
   created_at: Timestamp;
@@ -47,8 +47,75 @@ type UserProfileInsert = Pick<UserProfileRow, 'id'> &
 // Define user profile update type (all fields optional)
 type UserProfileUpdate = Partial<UserProfileRow>;
 
+// Project status enum
+export type ProjectStatus =
+  | 'idea'
+  | 'concept'
+  | 'prototype'
+  | 'mvp'
+  | 'beta'
+  | 'launched'
+  | 'growing'
+  | 'scaling'
+  | 'established'
+  | 'acquired'
+  | 'closed';
+
 // Permission roles
-type ProjectRole = 'viewer' | 'editor' | 'admin' | 'owner';
+export type ProjectRole = 'viewer' | 'editor' | 'admin' | 'owner';
+
+// Project fields without common fields
+type ProjectFields = {
+  slug: string;
+  public_snapshot_id: UUID | null;
+  new_snapshot_id: UUID | null;
+  is_public: boolean;
+  is_demo: boolean;
+  is_archived: boolean;
+};
+
+// Define project row type
+type ProjectRow = CommonTableFields & ProjectFields;
+
+// Define project insert type
+type ProjectInsert = Partial<Omit<CommonTableFields, 'id'>> &
+  Pick<ProjectFields, 'slug'> &
+  Partial<Omit<ProjectFields, 'slug'>>;
+
+// Define project update type
+type ProjectUpdate = Partial<ProjectRow>;
+
+// Snapshot fields without common fields
+type SnapshotFields = {
+  project_id: UUID;
+  version: number;
+  name: string;
+  slogan: string | null;
+  description: string;
+  status: ProjectStatus;
+  country: string | null;
+  city: string | null;
+  repository_urls: string[] | null;
+  website_urls: string[] | null;
+  logo_url: string | null;
+  banner_url: string | null;
+  video_urls: string[] | null;
+  author_id: UUID;
+  is_locked: boolean;
+};
+
+// Define snapshot row type
+type SnapshotRow = CommonTableFields & SnapshotFields;
+
+// Define snapshot insert type
+type SnapshotInsert = Partial<Omit<CommonTableFields, 'id'>> &
+  Pick<SnapshotFields, 'project_id' | 'version' | 'name' | 'description' | 'status' | 'author_id'> &
+  Partial<
+    Omit<SnapshotFields, 'project_id' | 'version' | 'name' | 'description' | 'status' | 'author_id'>
+  >;
+
+// Define snapshot update type
+type SnapshotUpdate = Partial<SnapshotRow>;
 
 // Project permissions fields
 type ProjectPermissionFields = {
@@ -166,6 +233,12 @@ export interface Database {
       // User Profiles
       user_profiles: TableDefinition<UserProfileRow, UserProfileInsert, UserProfileUpdate>;
 
+      // Projects
+      projects: TableDefinition<ProjectRow, ProjectInsert, ProjectUpdate>;
+
+      // Snapshots
+      snapshots: TableDefinition<SnapshotRow, SnapshotInsert, SnapshotUpdate>;
+
       // Project Permissions
       project_permissions: TableDefinition<
         ProjectPermissionRow,
@@ -177,10 +250,25 @@ export interface Database {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      create_project: {
+        Args: {
+          p_name: string;
+          p_slug: string;
+          p_description: string;
+          p_status: ProjectStatus;
+        };
+        Returns: UUID;
+      };
+      is_nickname_available: {
+        Args: {
+          nickname: string;
+        };
+        Returns: boolean;
+      };
     };
     Enums: {
-      [_ in never]: never;
+      project_status_enum: ProjectStatus;
+      project_role_enum: ProjectRole;
     };
   };
   storage: {
@@ -245,4 +333,22 @@ export type AuthResponse = {
   error: {
     message: string;
   } | null;
+};
+
+// Export specific table row types for easier use in components
+export type Project = Database['public']['Tables']['projects']['Row'];
+export type Snapshot = Database['public']['Tables']['snapshots']['Row'];
+export type ProjectPermission = Database['public']['Tables']['project_permissions']['Row'];
+export type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
+
+// Project with related data
+export type ProjectWithSnapshot = Project & {
+  public_snapshot?: Snapshot | null;
+  new_snapshot?: Snapshot | null;
+  permissions?: ProjectPermission[];
+};
+
+// Snapshot with related data
+export type SnapshotWithAuthor = Snapshot & {
+  author?: UserProfile | null;
 };
