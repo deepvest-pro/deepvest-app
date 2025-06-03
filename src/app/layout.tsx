@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Metadata } from 'next';
-import { ThemeProvider } from '../styles/theme';
+import { TanStackQueryProvider } from '@/lib/react-query/provider';
+import { NavBar, RootLayoutContent } from '@/components/layout';
 
 // Import global styles
 import '../styles/global/globals.css';
@@ -14,7 +15,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <TanStackQueryProvider>
+          <RootLayoutContent>
+            <NavBar />
+            <main style={{ flex: '1 1 auto' }}>{children}</main>
+          </RootLayoutContent>
+        </TanStackQueryProvider>
       </body>
     </html>
   );

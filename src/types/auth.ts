@@ -1,0 +1,14 @@
+import type { User as SupabaseUser } from '@supabase/auth-js';
+
+export interface UserProfile {
+  id: string;
+  full_name?: string;
+  nickname?: string;
+  avatar_url?: string | null;
+  [key: string]: string | number | boolean | null | undefined;
+}
+
+export interface UserData {
+  user: SupabaseUser;
+  profile: UserProfile | null;
+}

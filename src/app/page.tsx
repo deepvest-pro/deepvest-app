@@ -1,12 +1,16 @@
-import React from 'react';
-import { PageContainer, PageHeader } from '@/components/layout';
-import { ComponentsDemo } from '@/components/ui';
+import type { ReactNode } from 'react';
+import { getUserData } from '@/lib/react-query/auth-queries';
+import { AuthStatus } from '@/components/auth/auth-status';
+import { HomePageContent } from '@/components/home/home-page-content';
 
-export default function Home() {
+export default async function HomePage() {
+  const userData = await getUserData();
+  const isAuthenticated = !!userData;
+
+  // Get AuthStatus component content
+  const authStatusContent = (await AuthStatus()) as ReactNode;
+
   return (
-    <PageContainer>
-      <PageHeader title="DeepVest" subtitle="Modern investment platform" />
-      <ComponentsDemo />
-    </PageContainer>
+    <HomePageContent isAuthenticated={isAuthenticated} authStatusContent={authStatusContent} />
   );
 }
