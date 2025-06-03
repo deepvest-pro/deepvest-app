@@ -14,6 +14,14 @@ export function ProjectDocuments({ projectId }: ProjectDocumentsProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Dummy function for content viewing - no transcription on public pages
+  const handleShowContentOnly = (document: ProjectContentWithAuthor) => {
+    console.log('handleShowContentOnly:', document);
+    // This function intentionally does nothing - the DocumentsDisplay component
+    // will handle showing the content modal when document.content exists
+    // We just need to provide this prop so the "Show content" button appears
+  };
+
   useEffect(() => {
     const fetchPublicDocuments = async () => {
       try {
@@ -81,6 +89,7 @@ export function ProjectDocuments({ projectId }: ProjectDocumentsProps) {
         documents={documents}
         showActions={false}
         canEdit={false}
+        onGetContent={handleShowContentOnly}
         emptyMessage="No public documents available"
       />
     </Box>

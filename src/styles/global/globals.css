@@ -1,5 +1,7 @@
 /* Import Radix UI Themes styles */
 @import '@radix-ui/themes/styles.css';
+/* Import highlight.js styles for code syntax highlighting */
+@import 'highlight.js/styles/github-dark.css';
 
 /* Base styles */
 :root {
@@ -42,4 +44,212 @@ a {
   --cursor-menu-item: pointer;
   --cursor-radio: pointer;
   --cursor-switch: pointer;
+}
+
+/* Markdown content styles */
+.markdown-content {
+  line-height: 1.6;
+  color: var(--gray-12);
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+  margin: 1.5em 0 0.5em 0;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--gray-12);
+}
+
+.markdown-content h1 {
+  font-size: 2em;
+  border-bottom: 2px solid var(--gray-6);
+  padding-bottom: 0.3em;
+}
+
+.markdown-content h2 {
+  font-size: 1.5em;
+  border-bottom: 1px solid var(--gray-6);
+  padding-bottom: 0.3em;
+}
+
+.markdown-content h3 {
+  font-size: 1.25em;
+}
+
+.markdown-content h4 {
+  font-size: 1.1em;
+}
+
+.markdown-content h5,
+.markdown-content h6 {
+  font-size: 1em;
+}
+
+.markdown-content p {
+  margin: 1em 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin: 1em 0;
+  padding-left: 2em;
+}
+
+.markdown-content li {
+  margin: 0.25em 0;
+}
+
+.markdown-content blockquote {
+  margin: 1em 0;
+  padding: 0.5em 1em;
+  border-left: 4px solid var(--blue-8);
+  background-color: var(--gray-2);
+  border-radius: 0 4px 4px 0;
+}
+
+.markdown-content blockquote p {
+  margin: 0.5em 0;
+}
+
+.markdown-content code {
+  background-color: var(--gray-3);
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-family:
+    'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 0.9em;
+  color: var(--red-11);
+}
+
+.markdown-content pre {
+  background-color: var(--gray-3);
+  padding: 1em;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.markdown-content pre code {
+  background-color: transparent;
+  padding: 0;
+  color: var(--gray-12);
+}
+
+.markdown-content table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  width: 100%;
+  border: 1px solid var(--gray-6);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid var(--gray-6);
+  padding: 0.75em 1em;
+  text-align: left;
+}
+
+.markdown-content th {
+  background-color: var(--gray-3);
+  font-weight: 600;
+  color: var(--gray-12);
+}
+
+.markdown-content tr:nth-child(even) {
+  background-color: var(--gray-2);
+}
+
+.markdown-content tr:hover {
+  background-color: var(--gray-3);
+}
+
+.markdown-content a {
+  color: var(--blue-11);
+  text-decoration: underline;
+}
+
+.markdown-content a:hover {
+  color: var(--blue-12);
+}
+
+.markdown-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 1em 0;
+}
+
+.markdown-content hr {
+  border: none;
+  border-top: 2px solid var(--gray-6);
+  margin: 2em 0;
+}
+
+.markdown-content strong {
+  font-weight: 600;
+}
+
+.markdown-content em {
+  font-style: italic;
+}
+
+/* Task lists */
+.markdown-content input[type='checkbox'] {
+  margin-right: 0.5em;
+}
+
+.markdown-content .task-list-item {
+  list-style: none;
+  margin-left: -1.5em;
+}
+
+/* Code syntax highlighting - override highlight.js theme */
+.markdown-content .hljs {
+  background-color: var(--gray-3) !important;
+  color: var(--gray-12) !important;
+  border-radius: 6px;
+}
+
+/* Override specific highlight.js colors to match Radix theme */
+.markdown-content .hljs-keyword,
+.markdown-content .hljs-selector-tag,
+.markdown-content .hljs-literal,
+.markdown-content .hljs-section,
+.markdown-content .hljs-link {
+  color: var(--blue-11) !important;
+}
+
+.markdown-content .hljs-string,
+.markdown-content .hljs-attr {
+  color: var(--green-11) !important;
+}
+
+.markdown-content .hljs-number,
+.markdown-content .hljs-regexp,
+.markdown-content .hljs-addition {
+  color: var(--orange-11) !important;
+}
+
+.markdown-content .hljs-comment,
+.markdown-content .hljs-quote,
+.markdown-content .hljs-deletion {
+  color: var(--gray-9) !important;
+  font-style: italic;
+}
+
+.markdown-content .hljs-variable,
+.markdown-content .hljs-template-variable,
+.markdown-content .hljs-attribute {
+  color: var(--purple-11) !important;
+}
+
+.markdown-content .hljs-function,
+.markdown-content .hljs-title {
+  color: var(--red-11) !important;
 }

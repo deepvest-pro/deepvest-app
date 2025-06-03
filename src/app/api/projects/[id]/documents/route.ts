@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createSupabaseServerClient } from '@/lib/supabase/client';
+import { updateSnapshotContents } from '@/lib/supabase/helpers';
 
 // Validation schema for creating/updating project content
 const createContentSchema = z.object({
@@ -185,6 +186,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       console.error('Error creating document:', createError);
       return NextResponse.json({ error: 'Failed to create document' }, { status: 500 });
     }
+
+    // Update snapshot contents to mark it as changed
+    await updateSnapshotContents(projectId);
 
     return NextResponse.json({ document }, { status: 201 });
   } catch (error) {

@@ -702,6 +702,85 @@ export async function updateUserRole(projectId: string, userId: string, newRole:
 }
 
 /**
+ * Updates the contents array in the current snapshot when documents are modified
+ */
+export async function updateSnapshotContents(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+
+  // Get the current project to find the new_snapshot_id
+  const { data: project, error: projectError } = await supabase
+    .from('projects')
+    .select('new_snapshot_id, public_snapshot_id')
+    .eq('id', projectId)
+    .single();
+
+  if (projectError || !project) {
+    return { error: projectError?.message || 'Project not found', success: false };
+  }
+
+  // Get all document IDs for this project
+  const { data: documents, error: documentsError } = await supabase
+    .from('project_contents')
+    .select('id')
+    .eq('project_id', projectId)
+    .is('deleted_at', null);
+
+  if (documentsError) {
+    return { error: documentsError.message, success: false };
+  }
+
+  const documentIds = documents?.map(doc => doc.id) || [];
+
+  // If there's a new_snapshot_id that differs from public_snapshot_id, update it
+  // Otherwise, create a new snapshot
+  const isEditingDraft =
+    project.new_snapshot_id && project.new_snapshot_id !== project.public_snapshot_id;
+
+  if (isEditingDraft) {
+    // Update existing draft snapshot
+    const { error: updateError } = await supabase
+      .from('snapshots')
+      .update({
+        contents: documentIds,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', project.new_snapshot_id)
+      .eq('is_locked', false);
+
+    if (updateError) {
+      return { error: updateError.message, success: false };
+    }
+  } else {
+    // Need to create a new snapshot or update the existing one
+    // This should trigger the same logic as when editing project content
+    // For now, we'll just update the public snapshot if it exists and is unlocked
+    if (project.public_snapshot_id) {
+      const { data: snapshot, error: snapshotError } = await supabase
+        .from('snapshots')
+        .select('is_locked')
+        .eq('id', project.public_snapshot_id)
+        .single();
+
+      if (!snapshotError && !snapshot.is_locked) {
+        const { error: updateError } = await supabase
+          .from('snapshots')
+          .update({
+            contents: documentIds,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', project.public_snapshot_id);
+
+        if (updateError) {
+          return { error: updateError.message, success: false };
+        }
+      }
+    }
+  }
+
+  return { success: true, error: null };
+}
+
+/**
  * Fetches the core status (public, archived) of a project by its ID using an RPC call.
  * This is a lightweight check often used before fetching full project details.
  */

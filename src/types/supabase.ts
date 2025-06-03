@@ -108,6 +108,7 @@ type SnapshotFields = {
   logo_url: string | null;
   banner_url: string | null;
   video_urls: string[] | null;
+  contents: UUID[] | null;
   author_id: UUID | ExpandedUser;
   is_locked: boolean;
 };

@@ -4,6 +4,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Box, Card, Flex, Text, Heading, Button } from '@radix-ui/themes';
 import { FileTextIcon, PlusIcon } from '@radix-ui/react-icons';
 import { ProjectContentWithAuthor } from '@/types/supabase';
+import { TranscribeRequest, TranscribeResponse } from '@/types/transcribe';
+import { getPrompt } from '@/lib/prompts';
 import { useToastHelpers } from '@/components/layout/ToastProvider';
 import { DocumentsList } from '@/components/forms/DocumentsList';
 import { DocumentForm } from '@/components/forms/DocumentForm';
@@ -29,6 +31,7 @@ export function DocumentsSection({ projectId }: DocumentsSectionProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [editingDocument, setEditingDocument] = useState<ProjectContentWithAuthor | null>(null);
   const [canEdit, setCanEdit] = useState(false);
+  const [transcribingDocuments, setTranscribingDocuments] = useState<Set<string>>(new Set());
 
   const { success: showSuccessToast, error: showErrorToast } = useToastHelpers();
   const showErrorToastRef = useRef(showErrorToast);
@@ -203,6 +206,71 @@ export function DocumentsSection({ projectId }: DocumentsSectionProps) {
     }
   };
 
+  const handleGetContent = async (document: ProjectContentWithAuthor) => {
+    if (!document.file_urls.length) {
+      showErrorToast('No file available for transcription');
+      return;
+    }
+
+    try {
+      setTranscribingDocuments(prev => new Set(prev).add(document.id));
+      showSuccessToast('Starting content extraction...');
+
+      const transcribeRequest: TranscribeRequest = {
+        url: document.file_urls[0],
+        prompt: getPrompt('DOCUMENT_CONTENT_EXTRACTION'),
+      };
+
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(transcribeRequest),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to transcribe document');
+      }
+
+      const transcribeResponse: TranscribeResponse = await response.json();
+
+      if (!transcribeResponse.success) {
+        throw new Error(transcribeResponse.error || 'Transcription failed');
+      }
+
+      // Update the document with the extracted content
+      const updateResponse = await fetch(`/api/projects/${projectId}/documents/${document.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content: transcribeResponse.result,
+        }),
+      });
+
+      if (!updateResponse.ok) {
+        throw new Error('Failed to update document with extracted content');
+      }
+
+      const updateData = await updateResponse.json();
+      setDocuments(prev => prev.map(doc => (doc.id === document.id ? updateData.document : doc)));
+
+      showSuccessToast('Content extracted and saved successfully!');
+    } catch (error) {
+      console.error('Error extracting content:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to extract content';
+      showErrorToast(errorMessage);
+    } finally {
+      setTranscribingDocuments(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(document.id);
+        return newSet;
+      });
+    }
+  };
+
   const handleEditClick = (document: ProjectContentWithAuthor) => {
     setEditingDocument(document);
     setViewMode('edit');
@@ -260,6 +328,8 @@ export function DocumentsSection({ projectId }: DocumentsSectionProps) {
               onEdit={handleEditClick}
               onDelete={handleDeleteDocument}
               onToggleVisibility={handleToggleVisibility}
+              onGetContent={handleGetContent}
+              transcribingDocuments={transcribingDocuments}
               canEdit={canEdit}
             />
           )}

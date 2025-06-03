@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createSupabaseServerClient } from '@/lib/supabase/client';
+import { updateSnapshotContents } from '@/lib/supabase/helpers';
 
 // Validation schema for updating project content
 const updateContentSchema = z.object({
@@ -194,6 +195,9 @@ export async function PUT(
       return NextResponse.json({ error: 'Failed to update document' }, { status: 500 });
     }
 
+    // Update snapshot contents to mark it as changed
+    await updateSnapshotContents(projectId);
+
     return NextResponse.json({ document });
   } catch (error) {
     console.error('Document PUT handler error:', error);
@@ -268,6 +272,9 @@ export async function DELETE(
       console.error('Error deleting document:', deleteError);
       return NextResponse.json({ error: 'Failed to delete document' }, { status: 500 });
     }
+
+    // Update snapshot contents to mark it as changed
+    await updateSnapshotContents(projectId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

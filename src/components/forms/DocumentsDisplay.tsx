@@ -1,14 +1,17 @@
 'use client';
 
-import React from 'react';
-import { Flex, Text, Card, Badge, Button } from '@radix-ui/themes';
+import { useState } from 'react';
+import { Flex, Text, Card, Badge, Button, Dialog, ScrollArea, Spinner } from '@radix-ui/themes';
 import {
   FileTextIcon,
   DownloadIcon,
   DotsHorizontalIcon,
   EyeOpenIcon,
   EyeClosedIcon,
+  MagicWandIcon,
+  EyeOpenIcon as ViewIcon,
 } from '@radix-ui/react-icons';
+import { MarkdownViewer } from '@/components/ui';
 import { DropdownMenu } from '@radix-ui/themes';
 import { ProjectContentWithAuthor, ContentType } from '@/types/supabase';
 
@@ -18,6 +21,8 @@ interface DocumentsDisplayProps {
   onEdit?: (document: ProjectContentWithAuthor) => void;
   onDelete?: (documentId: string) => void;
   onToggleVisibility?: (documentId: string, isPublic: boolean) => void;
+  onGetContent?: (document: ProjectContentWithAuthor) => void;
+  transcribingDocuments?: Set<string>;
   canEdit?: boolean;
   emptyMessage?: string;
 }
@@ -28,9 +33,19 @@ export function DocumentsDisplay({
   onEdit,
   onDelete,
   onToggleVisibility,
+  onGetContent,
+  transcribingDocuments = new Set(),
   canEdit = false,
   emptyMessage = 'No documents available',
 }: DocumentsDisplayProps) {
+  const [contentModalOpen, setContentModalOpen] = useState(false);
+  const [selectedDocumentContent, setSelectedDocumentContent] = useState<string>('');
+
+  const handleShowContent = (content: string) => {
+    setSelectedDocumentContent(content);
+    setContentModalOpen(true);
+  };
+
   const getContentTypeLabel = (contentType: ContentType): string => {
     const labels: Record<ContentType, string> = {
       presentation: 'Presentation',
@@ -153,6 +168,48 @@ export function DocumentsDisplay({
                 <Text size="1" color="gray">
                   {document.author?.full_name && `by ${document.author.full_name}`}
                 </Text>
+
+                {/* Get content / Show content button */}
+                {onGetContent && (
+                  <>
+                    {/* Show "Get content" button only if canEdit=true and no content exists */}
+                    {canEdit && document.file_urls.length > 0 && !document.content && (
+                      <Button
+                        size="1"
+                        variant="soft"
+                        color="blue"
+                        onClick={() => onGetContent(document)}
+                        disabled={transcribingDocuments.has(document.id)}
+                        style={{ marginTop: '8px', width: 'fit-content' }}
+                      >
+                        <Flex align="center" gap="2">
+                          {transcribingDocuments.has(document.id) ? (
+                            <Spinner size="1" />
+                          ) : (
+                            <MagicWandIcon width="12" height="12" />
+                          )}
+                          {transcribingDocuments.has(document.id) ? 'Extracting...' : 'Get content'}
+                        </Flex>
+                      </Button>
+                    )}
+
+                    {/* Show "Show content" button if content exists (regardless of canEdit) */}
+                    {document.content && (
+                      <Button
+                        size="1"
+                        variant="soft"
+                        color="green"
+                        onClick={() => handleShowContent(document.content!)}
+                        style={{ marginTop: '8px', width: 'fit-content' }}
+                      >
+                        <Flex align="center" gap="2">
+                          <ViewIcon width="12" height="12" />
+                          Show content
+                        </Flex>
+                      </Button>
+                    )}
+                  </>
+                )}
               </Flex>
             </Flex>
 
@@ -194,6 +251,26 @@ export function DocumentsDisplay({
           </Flex>
         </Card>
       ))}
+
+      {/* Content Modal */}
+      <Dialog.Root open={contentModalOpen} onOpenChange={setContentModalOpen}>
+        <Dialog.Content style={{ maxWidth: '800px', maxHeight: '80vh' }}>
+          <Dialog.Title>Document Content</Dialog.Title>
+          <Dialog.Description>Extracted markdown content from the document</Dialog.Description>
+
+          <ScrollArea style={{ height: '60vh', marginTop: '16px' }}>
+            <MarkdownViewer content={selectedDocumentContent} />
+          </ScrollArea>
+
+          <Flex gap="3" mt="4" justify="end">
+            <Dialog.Close>
+              <Button variant="soft" color="gray">
+                Close
+              </Button>
+            </Dialog.Close>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
     </Flex>
   );
 }

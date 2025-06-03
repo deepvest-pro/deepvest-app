@@ -10,6 +10,8 @@ interface DocumentsListProps {
   onEdit: (document: ProjectContentWithAuthor) => void;
   onDelete: (documentId: string) => void;
   onToggleVisibility: (documentId: string, isPublic: boolean) => void;
+  onGetContent?: (document: ProjectContentWithAuthor) => void;
+  transcribingDocuments?: Set<string>;
   canEdit?: boolean;
 }
 
@@ -18,6 +20,8 @@ export function DocumentsList({
   onEdit,
   onDelete,
   onToggleVisibility,
+  onGetContent,
+  transcribingDocuments,
   canEdit = false,
 }: DocumentsListProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -44,6 +48,8 @@ export function DocumentsList({
         onEdit={onEdit}
         onDelete={handleDeleteClick}
         onToggleVisibility={onToggleVisibility}
+        onGetContent={onGetContent}
+        transcribingDocuments={transcribingDocuments}
         canEdit={canEdit}
         emptyMessage="No documents uploaded yet"
       />
