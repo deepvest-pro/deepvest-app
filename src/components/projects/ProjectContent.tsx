@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -29,27 +29,48 @@ import {
   EyeOpenIcon,
   EyeClosedIcon,
   CalendarIcon,
-  RocketIcon,
   TrashIcon,
 } from '@radix-ui/react-icons';
-import { ProjectWithSnapshot, ProjectRole } from '@/types/supabase';
+import {
+  ProjectWithSnapshot,
+  ProjectRole,
+  ProjectContentWithAuthor,
+  TeamMember,
+} from '@/types/supabase';
 import { toggleProjectPublication, publishDraft, deleteProject } from '@/app/projects/[id]/actions';
+import { useProjectData, useProjectPermissions } from '@/lib/hooks/useProjectData';
+import { getInitials } from '@/lib/utils/format';
+import { ProjectStatusBadge } from '@/components/ui/StatusBadge';
 import { useToastHelpers } from '@/components/layout/ToastProvider';
 import { ProjectDocuments } from './ProjectDocuments';
+import { ProjectTeam } from './ProjectTeam';
 
 interface ProjectContentProps {
   project: ProjectWithSnapshot;
+  documents: ProjectContentWithAuthor[];
+  team: TeamMember[];
   isAuthenticated: boolean;
   userId?: string;
   userRole?: ProjectRole | null;
 }
 
-export function ProjectContent({ project: initialProject, userRole }: ProjectContentProps) {
-  const [project, setProject] = useState(initialProject);
+export function ProjectContent({
+  project: initialProject,
+  documents: initialDocuments,
+  team: initialTeam,
+  userId,
+}: ProjectContentProps) {
+  const [project, setProject] = useState<ProjectWithSnapshot>(initialProject);
+  const [documents] = useState<ProjectContentWithAuthor[]>(initialDocuments);
+  const [team] = useState<TeamMember[]>(initialTeam);
   const [isPending, startTransition] = useTransition();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const { success: toastSuccess, error: toastError } = useToastHelpers();
   const router = useRouter();
+
+  // Use custom hooks for data processing
+  const projectData = useProjectData(project);
+  const permissions = useProjectPermissions(project, userId);
 
   if (!project) {
     return (
@@ -74,78 +95,14 @@ export function ProjectContent({ project: initialProject, userRole }: ProjectCon
     );
   }
 
-  // Get current snapshot data
-  const currentSnapshot = project.new_snapshot || project.public_snapshot;
-  const projectName = currentSnapshot?.name || 'Unnamed Project';
-  const projectDescription = currentSnapshot?.description || 'No description provided.';
-  const projectStatus = currentSnapshot?.status || 'idea';
-  const projectSlogan = currentSnapshot?.slogan;
-  const projectCountry = currentSnapshot?.country;
-  const projectCity = currentSnapshot?.city;
-  const websiteUrls = currentSnapshot?.website_urls || [];
-  const repositoryUrls = currentSnapshot?.repository_urls || [];
-  const logoUrl = currentSnapshot?.logo_url;
-  const bannerUrl = currentSnapshot?.banner_url;
-
-  const canEdit = userRole === 'admin' || userRole === 'owner' || userRole === 'editor';
-  const isOwner = userRole === 'owner';
-
-  // Check if there's a draft to publish
-  const hasDraftToPublish =
-    project.new_snapshot_id && project.new_snapshot_id !== project.public_snapshot_id;
-
-  // Format date to be more readable
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
-
-  // Format status for display
-  const formatStatus = (status: string) => {
-    return status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
-  };
-
-  // Get status color
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'idea':
-        return 'gray';
-      case 'concept':
-        return 'blue';
-      case 'prototype':
-        return 'cyan';
-      case 'mvp':
-        return 'green';
-      case 'beta':
-        return 'yellow';
-      case 'launched':
-        return 'orange';
-      case 'growing':
-        return 'red';
-      case 'scaling':
-        return 'purple';
-      case 'established':
-        return 'indigo';
-      case 'acquired':
-        return 'pink';
-      case 'closed':
-        return 'gray';
-      default:
-        return 'gray';
-    }
-  };
-
   return (
     <Container>
       {/* Banner Image */}
       <Box position="relative" mb="8">
         <AspectRatio ratio={16 / 6} style={{ maxHeight: '300px', borderRadius: 'var(--radius-3)' }}>
-          {bannerUrl ? (
+          {projectData.bannerUrl ? (
             <Image
-              src={bannerUrl}
+              src={projectData.bannerUrl}
               alt="Project banner"
               fill
               style={{ objectFit: 'cover', borderRadius: 'var(--radius-3)' }}
@@ -180,10 +137,10 @@ export function ProjectContent({ project: initialProject, userRole }: ProjectCon
             >
               <Avatar
                 size="8"
-                src={logoUrl || undefined}
+                src={projectData.logoUrl || undefined}
                 alt="Project Logo"
                 radius="full"
-                fallback={projectName[0] || '?'}
+                fallback={getInitials(projectData.name)}
                 style={{ width: '160px', height: '160px' }}
               />
             </Box>
@@ -194,20 +151,10 @@ export function ProjectContent({ project: initialProject, userRole }: ProjectCon
                 {/* Project Status */}
                 <Heading size="3">Project Status</Heading>
                 <Flex direction="column" gap="2">
-                  <Badge
-                    color={getStatusColor(projectStatus)}
-                    size="2"
-                    variant="soft"
-                    radius="full"
-                  >
-                    <Flex gap="1" align="center">
-                      <RocketIcon />
-                      <Text>{formatStatus(projectStatus)}</Text>
-                    </Flex>
-                  </Badge>
+                  <ProjectStatusBadge status={projectData.status} />
 
                   <Flex gap="2" align="center">
-                    {project.is_public ? (
+                    {projectData.isPublic ? (
                       <>
                         <EyeOpenIcon color="var(--green-9)" />
                         <Text size="2">Public Project</Text>
@@ -220,10 +167,10 @@ export function ProjectContent({ project: initialProject, userRole }: ProjectCon
                     )}
                   </Flex>
 
-                  {project.created_at && (
+                  {projectData.formattedCreatedAt && (
                     <Flex gap="2" align="center">
                       <CalendarIcon color="var(--gray-9)" />
-                      <Text size="2">Created {formatDate(project.created_at)}</Text>
+                      <Text size="2">Created {projectData.formattedCreatedAt}</Text>
                     </Flex>
                   )}
                 </Flex>
@@ -232,7 +179,7 @@ export function ProjectContent({ project: initialProject, userRole }: ProjectCon
 
                 {/* Actions */}
                 <Flex direction="column" gap="2">
-                  {isOwner && hasDraftToPublish && (
+                  {permissions.isOwner && projectData.hasDraftToPublish && (
                     <Button
                       variant="solid"
                       color="blue"
@@ -246,10 +193,13 @@ export function ProjectContent({ project: initialProject, userRole }: ProjectCon
                             });
 
                             if (result.success) {
-                              setProject(prev => ({
-                                ...prev,
-                                public_snapshot_id: prev.new_snapshot_id,
-                              }));
+                              setProject(
+                                prev =>
+                                  ({
+                                    ...prev,
+                                    public_snapshot_id: prev.new_snapshot_id,
+                                  }) as ProjectWithSnapshot,
+                              );
                               toastSuccess('Draft published successfully!');
                             } else {
                               toastError(result.error || 'Failed to publish draft.');
@@ -265,10 +215,10 @@ export function ProjectContent({ project: initialProject, userRole }: ProjectCon
                     </Button>
                   )}
 
-                  {isOwner && (
+                  {permissions.isOwner && (
                     <Button
-                      variant={project.is_public ? 'soft' : 'solid'}
-                      color={project.is_public ? 'red' : 'green'}
+                      variant={projectData.isPublic ? 'soft' : 'solid'}
+                      color={projectData.isPublic ? 'red' : 'green'}
                       size="2"
                       style={{ width: '100%' }}
                       onClick={() => {
@@ -276,11 +226,17 @@ export function ProjectContent({ project: initialProject, userRole }: ProjectCon
                           try {
                             const result = await toggleProjectPublication({
                               projectId: project.id,
-                              isCurrentlyPublic: project.is_public,
+                              isCurrentlyPublic: projectData.isPublic,
                             });
 
                             if (result.success && typeof result.isPublic === 'boolean') {
-                              setProject(prev => ({ ...prev, is_public: result.isPublic! }));
+                              setProject(
+                                prev =>
+                                  ({
+                                    ...prev,
+                                    is_public: result.isPublic!,
+                                  }) as ProjectWithSnapshot,
+                              );
                               toastSuccess(
                                 result.isPublic
                                   ? 'Project published successfully!'
@@ -300,18 +256,18 @@ export function ProjectContent({ project: initialProject, userRole }: ProjectCon
                       }}
                       disabled={isPending}
                     >
-                      {project.is_public ? <EyeClosedIcon /> : <GlobeIcon />}
+                      {projectData.isPublic ? <EyeClosedIcon /> : <GlobeIcon />}
                       {isPending
-                        ? project.is_public
+                        ? projectData.isPublic
                           ? 'Unpublishing...'
                           : 'Publishing...'
-                        : project.is_public
+                        : projectData.isPublic
                           ? 'Unpublish'
                           : 'Publish'}
                     </Button>
                   )}
 
-                  {canEdit && (
+                  {permissions.canEdit && (
                     <Link href={`/projects/${project.id}/edit`} passHref>
                       <Button color="blue" size="2" style={{ width: '100%' }}>
                         <Pencil1Icon />
@@ -320,7 +276,7 @@ export function ProjectContent({ project: initialProject, userRole }: ProjectCon
                     </Link>
                   )}
 
-                  {isOwner && (
+                  {permissions.isOwner && (
                     <Button
                       variant="soft"
                       color="red"
@@ -338,13 +294,13 @@ export function ProjectContent({ project: initialProject, userRole }: ProjectCon
             </Card>
 
             {/* Links Card */}
-            {(websiteUrls.length > 0 || repositoryUrls.length > 0) && (
+            {(projectData.websiteUrls.length > 0 || projectData.repositoryUrls.length > 0) && (
               <Card style={{ width: '100%' }}>
                 <Heading size="3" mb="3">
                   Links
                 </Heading>
                 <Flex direction="column" gap="2">
-                  {websiteUrls.map((url, index) => (
+                  {projectData.websiteUrls.map((url, index) => (
                     <Link
                       key={index}
                       href={url.startsWith('http') ? url : `https://${url}`}
@@ -357,7 +313,7 @@ export function ProjectContent({ project: initialProject, userRole }: ProjectCon
                       </Button>
                     </Link>
                   ))}
-                  {repositoryUrls.map((url, index) => (
+                  {projectData.repositoryUrls.map((url, index) => (
                     <Link
                       key={index}
                       href={url.startsWith('http') ? url : `https://${url}`}
@@ -382,8 +338,8 @@ export function ProjectContent({ project: initialProject, userRole }: ProjectCon
             <Flex direction="column" gap="4">
               <Flex direction="column" gap="1">
                 <Flex align="center" gap="2">
-                  <Heading size="7">{projectName}</Heading>
-                  {project.is_public && (
+                  <Heading size="7">{projectData.name}</Heading>
+                  {projectData.isPublic && (
                     <Badge color="green" size="1" variant="soft" radius="full">
                       <Flex gap="1" align="center">
                         <CheckCircledIcon />
@@ -393,38 +349,36 @@ export function ProjectContent({ project: initialProject, userRole }: ProjectCon
                   )}
                 </Flex>
 
-                {projectSlogan && (
+                {projectData.slogan && (
                   <Text size="3" style={{ fontStyle: 'italic' }} color="gray" mt="1">
-                    &ldquo;{projectSlogan}&rdquo;
+                    &ldquo;{projectData.slogan}&rdquo;
                   </Text>
                 )}
 
                 <Flex mt="2" gap="3" wrap="wrap">
-                  {projectCountry && projectCity && (
+                  {projectData.location && (
                     <Badge variant="soft" size="1" radius="full">
                       <Flex gap="1" align="center">
                         <GlobeIcon />
-                        <Text>
-                          {projectCity}, {projectCountry}
-                        </Text>
+                        <Text>{projectData.location}</Text>
                       </Flex>
                     </Badge>
                   )}
 
-                  {project.created_at && (
+                  {projectData.formattedCreatedAt && (
                     <Badge variant="soft" size="1" radius="full">
                       <Flex gap="1" align="center">
                         <CalendarIcon />
-                        <Text>Created {formatDate(project.created_at)}</Text>
+                        <Text>Created {projectData.formattedCreatedAt}</Text>
                       </Flex>
                     </Badge>
                   )}
 
-                  {project.updated_at && (
+                  {projectData.formattedUpdatedAt && (
                     <Badge variant="soft" size="1" radius="full">
                       <Flex gap="1" align="center">
                         <InfoCircledIcon />
-                        <Text>Updated {formatDate(project.updated_at)}</Text>
+                        <Text>Updated {projectData.formattedUpdatedAt}</Text>
                       </Flex>
                     </Badge>
                   )}
@@ -433,16 +387,21 @@ export function ProjectContent({ project: initialProject, userRole }: ProjectCon
 
               <Box>
                 <Separator my="3" />
-                <Text size="2">{projectDescription}</Text>
+                <Text size="2">{projectData.description}</Text>
               </Box>
             </Flex>
           </Card>
 
           {/* Documents Section */}
-          <ProjectDocuments projectId={project.id} />
+          <ProjectDocuments documents={documents} />
+
+          {/* Team Section */}
+          <Box mt="6">
+            <ProjectTeam teamMembers={team} />
+          </Box>
 
           {/* Additional sections can be added here */}
-          {/* For example: Team members, milestones, funding rounds, etc. */}
+          {/* For example: milestones, funding rounds, etc. */}
         </Box>
       </Grid>
 
@@ -451,7 +410,7 @@ export function ProjectContent({ project: initialProject, userRole }: ProjectCon
         <AlertDialog.Content style={{ maxWidth: 450 }}>
           <AlertDialog.Title>Delete Project</AlertDialog.Title>
           <AlertDialog.Description size="2">
-            Are you sure you want to delete &ldquo;{projectName}&rdquo;? This action cannot be
+            Are you sure you want to delete &ldquo;{projectData.name}&rdquo;? This action cannot be
             undone and will permanently remove the project and all its data.
           </AlertDialog.Description>
 

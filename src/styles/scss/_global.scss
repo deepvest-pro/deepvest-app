@@ -1,1 +1,19 @@
 // Global styles
+
+// Team Member Card hover effects
+.team-member-card {
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  }
+}
+
+// Social links hover effects
+.social-link {
+  transition: all 0.2s ease;
+
+  &:hover {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}

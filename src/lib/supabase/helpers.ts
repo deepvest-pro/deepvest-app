@@ -920,3 +920,66 @@ export async function deleteProjectFiles(projectId: string) {
     };
   }
 }
+
+/**
+ * Get public documents for a project
+ */
+export async function getPublicProjectDocuments(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+
+  // Build query for public documents only
+  const { data: documents, error } = await supabase
+    .from('project_content')
+    .select('*')
+    .eq('project_id', projectId)
+    .eq('is_public', true)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching public documents:', error);
+    return { data: [], error };
+  }
+
+  // Get author information if we have documents
+  let documentsWithAuthors = documents || [];
+  if (documents && documents.length > 0) {
+    const authorIds = [...new Set(documents.map(doc => doc.author_id))];
+
+    const { data: authors } = await supabase
+      .from('user_profiles')
+      .select('id, full_name')
+      .in('id', authorIds);
+
+    // Map authors to documents
+    documentsWithAuthors = documents.map(doc => ({
+      ...doc,
+      author: authors?.find(author => author.id === doc.author_id) || null,
+    }));
+  }
+
+  return { data: documentsWithAuthors, error: null };
+}
+
+/**
+ * Get public team members for a project
+ */
+export async function getPublicProjectTeamMembers(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+
+  // Build query for active team members (public by default)
+  const { data, error } = await supabase
+    .from('team_members')
+    .select('*')
+    .eq('project_id', projectId)
+    .eq('status', 'active')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching public team members:', error);
+    return { data: [], error };
+  }
+
+  return { data: data || [], error: null };
+}

@@ -4,6 +4,8 @@ import {
   getProjectWithDetails,
   updateProject,
   deleteProjectFiles,
+  getPublicProjectDocuments,
+  getPublicProjectTeamMembers,
 } from '@/lib/supabase/helpers';
 import { createSupabaseServerClient } from '@/lib/supabase/client';
 import { updateProjectSchema } from '@/lib/validations/project';
@@ -20,71 +22,32 @@ interface RouteContext {
  * Get a specific project with permissions and snapshots
  */
 export async function GET(request: Request, { params }: RouteContext) {
-  const supabase = await createSupabaseServerClient();
+  try {
+    const { id: projectId } = await params;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    // Get project details
+    const { data: project, error: projectError } = await getProjectWithDetails(projectId);
 
-  const { id } = await params;
-
-  // 1. Check project existence and public status using RPC
-  const { data: projectStatusData, error: rpcError } = await supabase.rpc(
-    'get_project_status_by_id',
-    { p_project_id: id },
-  );
-
-  // Correctly access the first element if data is an array
-  const projectStatus =
-    Array.isArray(projectStatusData) && projectStatusData.length > 0 ? projectStatusData[0] : null;
-
-  if (rpcError || !projectStatus) {
-    console.error('RPC error or project not found:', rpcError);
-    return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-  }
-
-  const { is_public: isPublic, is_archived: isArchived } = projectStatus;
-
-  if (isArchived) {
-    return NextResponse.json({ error: 'Project has been archived' }, { status: 410 }); // 410 Gone
-  }
-
-  // 2. If project is not public and user is a guest (no user), return 403
-  if (!isPublic && !user) {
-    return NextResponse.json(
-      { error: 'This project is private. Please sign in to check your access.' },
-      { status: 403 },
-    );
-  }
-
-  // 3. If user is authenticated, check their specific role
-  if (user) {
-    const hasViewerAccess = await checkUserProjectRole(user.id, id, 'viewer');
-    if (!hasViewerAccess && !isPublic) {
-      // Authenticated user, project is private, and user doesn't have even viewer access
-      return NextResponse.json(
-        { error: 'You do not have permission to view this private project.' },
-        { status: 403 },
-      );
+    if (projectError || !project) {
+      return NextResponse.json({ error: projectError || 'Project not found' }, { status: 404 });
     }
-    // If user has viewer access OR project is public, proceed to fetch details.
+
+    // Get public documents using helper function
+    const { data: documents } = await getPublicProjectDocuments(projectId);
+
+    // Get public team members using helper function
+    const { data: team } = await getPublicProjectTeamMembers(projectId);
+
+    // Return structured response
+    return NextResponse.json({
+      project,
+      documents,
+      team,
+    });
+  } catch (error) {
+    console.error('Error fetching project with details:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-  // If it's a guest and project is public, also proceed.
-
-  // 4. Fetch full project details
-  const { data, error } = await getProjectWithDetails(id);
-
-  if (error || !data) {
-    // This might happen if RLS rules prevent access despite the RPC check passing (e.g. for a specific authenticated user)
-    // Or if there's an internal error in getProjectWithDetails
-    console.error('Error fetching project details after RPC/auth checks:', error);
-    return NextResponse.json(
-      { error: error || 'Failed to fetch project details' },
-      { status: 500 },
-    );
-  }
-
-  return NextResponse.json({ project: data });
 }
 
 /**

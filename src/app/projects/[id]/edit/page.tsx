@@ -36,25 +36,14 @@ export default async function EditProjectPage({ params }: EditProjectPageProps) 
     notFound();
   }
 
-  // Fetch user profile for form initialization
-  const { data: userProfile } = await supabase
-    .from('user_profiles')
-    .select('full_name')
-    .eq('id', user.id)
-    .single();
-
-  // Get user role for the project
+  // Check if user has permission to edit this project
   const userPermission = project.permissions?.find(
-    (permission: { user_id: string; role: string }) => permission.user_id === user.id,
+    (p: { user_id: string; role: string }) => p.user_id === user.id,
   );
-  const userRole = userPermission?.role || 'viewer';
 
-  return (
-    <EditProjectContent
-      project={project}
-      userFullName={userProfile?.full_name || ''}
-      userEmail={user.email || ''}
-      userRole={userRole}
-    />
-  );
+  if (!userPermission || !['owner', 'admin', 'editor'].includes(userPermission.role)) {
+    notFound();
+  }
+
+  return <EditProjectContent project={project} />;
 }

@@ -2,27 +2,34 @@
  * Project API client functions
  */
 
-import type { ProjectDataFromAI } from '@/types/ai';
+import type { ProjectDataFromAI, TeamMemberFromAI } from '@/types/ai';
 import { generateSlug } from '@/lib/validations/project';
 import { removeFileExtension } from '@/lib/utils/file-validation';
 
 /**
  * Creates a new project via API
  * @param projectData Project data
+ * @param skipAutoTeam Skip automatic CEO team member creation (for AI-generated projects)
  * @returns Created project
  */
-export const createProject = async (projectData: {
-  name: string;
-  slug: string;
-  description: string;
-  status: string;
-}) => {
+export const createProject = async (
+  projectData: {
+    name: string;
+    slug: string;
+    description: string;
+    status: string;
+  },
+  skipAutoTeam = false,
+) => {
   const response = await fetch('/api/projects', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(projectData),
+    body: JSON.stringify({
+      ...projectData,
+      skipAutoTeam, // Add flag to skip auto team creation
+    }),
   });
 
   if (!response.ok) {
@@ -30,8 +37,7 @@ export const createProject = async (projectData: {
     throw new Error(`Failed to create project: ${errorText}`);
   }
 
-  const result = await response.json();
-  return result.project;
+  return response.json();
 };
 
 /**
@@ -166,7 +172,7 @@ export const createDocument = async (projectId: string, fileName: string, fileUr
       content_type: 'presentation',
       file_urls: [fileUrl],
       description: 'Presentation uploaded via drag & drop',
-      is_public: false,
+      is_public: true,
     }),
   });
 
@@ -207,11 +213,30 @@ export const transcribeFile = async (fileUrl: string) => {
 /**
  * Generates project data from transcription using AI
  * @param transcription Transcription text
+ * @param userData User data for team extraction context
  * @returns Generated project data
  */
-export const generateProjectData = async (transcription: string): Promise<ProjectDataFromAI> => {
+export const generateProjectData = async (
+  transcription: string,
+  userData?: { name: string; email: string },
+): Promise<ProjectDataFromAI> => {
   const { getPrompt } = await import('@/lib/prompts');
-  const prompt = getPrompt('PROJECT_DATA_GENERATION') + '\n\n' + transcription;
+  let prompt = getPrompt('PROJECT_DATA_GENERATION');
+
+  // Replace user context placeholders if userData is provided
+  if (userData) {
+    prompt = prompt
+      .replace(/\{\{USER_NAME\}\}/g, userData.name)
+      .replace(/\{\{USER_EMAIL\}\}/g, userData.email);
+  } else {
+    // If no user data, remove the user context section
+    prompt = prompt.replace(
+      /Current user context:[\s\S]*?Content to analyze:/,
+      'Content to analyze:',
+    );
+  }
+
+  prompt = prompt + '\n\n' + transcription;
 
   const response = await fetch('/api/ai/generate-content', {
     method: 'POST',
@@ -258,4 +283,72 @@ export const updateDocument = async (projectId: string, documentId: string, cont
   }
 
   return response.json();
+};
+
+/**
+ * Creates team members from AI-extracted data
+ * @param projectId Project ID
+ * @param teamData Team data from AI
+ * @param authorId ID of the user creating the project
+ * @returns Array of created team members
+ */
+export const createTeamFromAI = async (
+  projectId: string,
+  teamData: TeamMemberFromAI[],
+  authorId: string,
+): Promise<unknown[]> => {
+  if (!teamData || teamData.length === 0) {
+    return [];
+  }
+
+  const createdMembers = [];
+
+  for (const member of teamData) {
+    try {
+      const teamMemberData = {
+        project_id: projectId,
+        author_id: authorId,
+        name: member.name,
+        email: member.email || null,
+        phone: null,
+        image_url: null,
+        country: null,
+        city: null,
+        is_founder: true,
+        equity_percent: null,
+        positions: member.positions,
+        status: 'active' as const,
+        x_url: null,
+        github_url: null,
+        linkedin_url: null,
+        user_id: null, // Will be linked later if user registers
+        joined_at: new Date().toISOString(),
+        departed_at: null,
+        departed_reason: null,
+      };
+
+      const response = await fetch(`/api/projects/${projectId}/team-members`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(teamMemberData),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Failed to create team member ${member.name}:`, errorText);
+        continue; // Skip this member but continue with others
+      }
+
+      const result = await response.json();
+      createdMembers.push(result.team_member);
+      console.log(`Team member created: ${member.name} with positions:`, member.positions);
+    } catch (error) {
+      console.error(`Error creating team member ${member.name}:`, error);
+      // Continue with other members
+    }
+  }
+
+  return createdMembers;
 };

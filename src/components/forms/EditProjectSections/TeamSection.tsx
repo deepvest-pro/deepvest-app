@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useFieldArray, useForm } from 'react-hook-form';
+import { useState } from 'react';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
@@ -25,6 +25,7 @@ import {
   EnvelopeClosedIcon,
 } from '@radix-ui/react-icons';
 import { useToastHelpers } from '@/components/layout/ToastProvider';
+import { validateEmail, emailExists } from '@/lib/utils/validation';
 
 // Validation schema for team section
 const teamSchema = z.object({
@@ -80,7 +81,6 @@ export function TeamSection({ initialData, onSave, isLoading = false }: TeamSect
   const {
     register,
     handleSubmit,
-    control,
     formState: { errors, isDirty },
     getValues,
   } = useForm<TeamFormData>({
@@ -99,12 +99,10 @@ export function TeamSection({ initialData, onSave, isLoading = false }: TeamSect
   });
 
   const teamMembersArray = useFieldArray({
-    control,
     name: 'teamMembers',
   });
 
   const collaboratorsArray = useFieldArray({
-    control,
     name: 'inviteCollaborators',
   });
 
@@ -118,23 +116,15 @@ export function TeamSection({ initialData, onSave, isLoading = false }: TeamSect
   };
 
   const handleAddCollaborator = () => {
-    if (!inviteEmail) {
-      error('Please enter an email address');
-      return;
-    }
-
-    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailPattern.test(inviteEmail)) {
-      error('Please enter a valid email address');
+    const emailError = validateEmail(inviteEmail);
+    if (emailError) {
+      error(emailError);
       return;
     }
 
     // Check if email already exists in collaborators
-    const existingCollaborator = getValues('inviteCollaborators').find(
-      c => c.email === inviteEmail,
-    );
-
-    if (existingCollaborator) {
+    const existingCollaborators = getValues('inviteCollaborators');
+    if (emailExists(inviteEmail, existingCollaborators)) {
       error('This collaborator has already been added');
       return;
     }

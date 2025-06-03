@@ -26,6 +26,7 @@ import {
   transcribeFile,
   generateProjectData,
   updateDocument,
+  createTeamFromAI,
 } from '@/lib/api/project-api';
 
 type ProcessingStep =
@@ -113,7 +114,8 @@ export function ProjectCreationDropzone() {
         // Step 2: Create temporary project
         updateProcessingStep('creating-project', 20, 'Creating project...');
         const tempProjectData = generateTemporaryProjectData();
-        const project = await createProject(tempProjectData);
+        const projectResponse = await createProject(tempProjectData, true); // Skip auto team creation
+        const project = projectResponse.project;
 
         // Step 3: Create snapshot
         updateProcessingStep('creating-snapshot', 30, 'Setting up project structure...');
@@ -139,7 +141,11 @@ export function ProjectCreationDropzone() {
 
         // Step 7: Generate project data
         updateProcessingStep('generating-data', 70, 'Generating project data with AI...');
-        const aiProjectData = await generateProjectData(transcriptionResult.result);
+        const userData = {
+          name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+          email: user.email || '',
+        };
+        const aiProjectData = await generateProjectData(transcriptionResult.result, userData);
 
         // Step 8: Update project with AI data
         updateProcessingStep('updating-project', 80, 'Finalizing project...');
@@ -148,10 +154,14 @@ export function ProjectCreationDropzone() {
         // Update document with transcription
         await updateDocument(project.id, documentResult.document.id, transcriptionResult.result);
 
-        // Step 9: Add owner to team
-        updateProcessingStep('adding-owner', 90, 'Setting up project ownership...');
-        // Note: Team members functionality will be added when team_members field is added to snapshots table
-        // For now, the owner is automatically added to project_permissions when project is created
+        // Step 9: Create team members from AI data
+        updateProcessingStep('adding-owner', 90, 'Setting up project team...');
+        if (aiProjectData.team && aiProjectData.team.length > 0) {
+          const createdMembers = await createTeamFromAI(project.id, aiProjectData.team, user.id);
+          console.log(`Created ${createdMembers.length} team members from presentation`);
+        } else {
+          console.log('No team data found in presentation, skipping team creation');
+        }
 
         // Step 10: Complete
         updateProcessingStep('completed', 100, 'Project created successfully!');

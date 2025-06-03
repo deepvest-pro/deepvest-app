@@ -13,6 +13,7 @@ import {
   SpeakerLoudIcon,
 } from '@radix-ui/react-icons';
 import { getAcceptedFileTypes, getMaxFileSize, getFileCategory } from '@/lib/file-constants';
+import { formatFileSize } from '@/lib/utils/format';
 
 interface DocumentUploadAreaProps {
   onFilesSelect: (files: File[]) => void;
@@ -139,14 +140,6 @@ export function DocumentUploadArea({
         }
         return <FileTextIcon width="16" height="16" />;
     }
-  };
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   return (

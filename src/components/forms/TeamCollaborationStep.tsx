@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useFieldArray, useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -16,6 +16,7 @@ import {
   Switch,
 } from '@radix-ui/themes';
 import { Cross2Icon, PlusIcon, EnvelopeClosedIcon } from '@radix-ui/react-icons';
+import { validateEmail, emailExists } from '@/lib/utils/validation';
 import { useToastHelpers } from '../layout/ToastProvider';
 
 // Helper type for use with React Hook Form
@@ -123,23 +124,15 @@ export function TeamCollaborationStep({
   };
 
   const handleAddCollaborator = () => {
-    if (!inviteEmail) {
-      showError('Please enter an email address');
-      return;
-    }
-
-    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailPattern.test(inviteEmail)) {
-      showError('Please enter a valid email address');
+    const emailError = validateEmail(inviteEmail);
+    if (emailError) {
+      showError(emailError);
       return;
     }
 
     // Check if email already exists in collaborators
-    const existingCollaborator = getValues('inviteCollaborators').find(
-      c => c.email === inviteEmail,
-    );
-
-    if (existingCollaborator) {
+    const existingCollaborators = getValues('inviteCollaborators');
+    if (emailExists(inviteEmail, existingCollaborators)) {
       showError('This collaborator has already been added');
       return;
     }

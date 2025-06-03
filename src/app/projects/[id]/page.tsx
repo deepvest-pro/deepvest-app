@@ -1,9 +1,14 @@
 import { notFound } from 'next/navigation';
 import { ExclamationTriangleIcon, EyeClosedIcon } from '@radix-ui/react-icons';
-import { getProjectWithDetails } from '@/lib/supabase/helpers';
+import {
+  getProjectWithDetails,
+  getPublicProjectDocuments,
+  getPublicProjectTeamMembers,
+} from '@/lib/supabase/helpers';
 import { getCurrentUser } from '@/lib/supabase/client';
 import { checkUserProjectRole, getProjectCoreStatus } from '@/lib/supabase/helpers';
 import { ProjectContent } from '@/components/projects/ProjectContent';
+import { ProjectContentWithAuthor, TeamMember } from '@/types/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -128,9 +133,16 @@ export default async function ProjectPage({ params: paramsPromise }: ProjectPage
     }
   }
 
+  // 5. Get documents and team data
+  const { data: documents }: { data: ProjectContentWithAuthor[] | null } =
+    await getPublicProjectDocuments(id);
+  const { data: team }: { data: TeamMember[] | null } = await getPublicProjectTeamMembers(id);
+
   return (
     <ProjectContent
       project={project}
+      documents={documents || []}
+      team={team || []}
       isAuthenticated={!!user}
       userId={user?.id}
       userRole={userRole}

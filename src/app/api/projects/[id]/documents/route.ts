@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createSupabaseServerClient } from '@/lib/supabase/client';
-import { updateSnapshotContents } from '@/lib/supabase/helpers';
+import { updateSnapshotContents, getPublicProjectDocuments } from '@/lib/supabase/helpers';
 
 // Validation schema for creating/updating project content
 const createContentSchema = z.object({
@@ -37,12 +37,35 @@ const createContentSchema = z.object({
   is_public: z.boolean().default(false),
 });
 
-// GET /api/projects/[id]/documents - List project documents
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+interface RouteContext {
+  params: Promise<{
+    id: string;
+  }>;
+}
+
+/**
+ * GET /api/projects/[id]/documents
+ * Get documents for a specific project
+ */
+export async function GET(request: Request, { params }: RouteContext) {
   try {
+    const { id: projectId } = await params;
+    const url = new URL(request.url);
+    const publicOnly = url.searchParams.get('public_only') === 'true';
+
+    if (publicOnly) {
+      // Use helper function for public documents
+      const { data: documents, error } = await getPublicProjectDocuments(projectId);
+
+      if (error) {
+        return NextResponse.json({ error: 'Failed to fetch documents' }, { status: 500 });
+      }
+
+      return NextResponse.json({ documents });
+    }
+
+    // For non-public requests, check authentication and permissions
     const supabase = await createSupabaseServerClient();
-    const { searchParams } = new URL(request.url);
-    const publicOnly = searchParams.get('public_only') === 'true';
 
     // Check authentication
     const {
@@ -50,42 +73,36 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       error: authError,
     } = await supabase.auth.getUser();
 
-    const { id: projectId } = await params;
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    // Build base query without JOIN to avoid schema cache issues
-    let query = supabase
+    // Check if user has permission to view this project
+    const { data: permission, error: permissionError } = await supabase
+      .from('project_permissions')
+      .select('role')
+      .eq('project_id', projectId)
+      .eq('user_id', user.id)
+      .single();
+
+    if (permissionError || !permission) {
+      return NextResponse.json({ error: 'Project not found or access denied' }, { status: 404 });
+    }
+
+    // Get all documents for the project (not just public ones)
+    const { data: documents, error: documentsError } = await supabase
       .from('project_content')
       .select('*')
       .eq('project_id', projectId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
-    // If public_only is requested or user is not authenticated, only show public documents
-    if (publicOnly || authError || !user) {
-      query = query.eq('is_public', true);
-    } else {
-      // For authenticated users, check permissions for private documents
-      const { data: permission, error: permissionError } = await supabase
-        .from('project_permissions')
-        .select('role')
-        .eq('project_id', projectId)
-        .eq('user_id', user.id)
-        .single();
-
-      // If user doesn't have permissions, only show public documents
-      if (permissionError || !permission) {
-        query = query.eq('is_public', true);
-      }
-    }
-
-    const { data: documents, error: documentsError } = await query;
-
     if (documentsError) {
       console.error('Error fetching documents:', documentsError);
       return NextResponse.json({ error: 'Failed to fetch documents' }, { status: 500 });
     }
 
-    // Get author information separately if we have documents
+    // Get author information if we have documents
     let documentsWithAuthors = documents || [];
     if (documents && documents.length > 0) {
       const authorIds = [...new Set(documents.map(doc => doc.author_id))];
@@ -104,8 +121,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({ documents: documentsWithAuthors });
   } catch (error) {
-    console.error('Documents GET handler error:', error);
-    return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 });
+    console.error('Error fetching project documents:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 

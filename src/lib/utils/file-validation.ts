@@ -2,7 +2,12 @@
  * File validation utilities
  */
 
+import { formatFileSize } from './format';
+
 export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+// Re-export formatFileSize for convenience
+export { formatFileSize };
 
 /**
  * Validates a file for upload
@@ -19,21 +24,6 @@ export const validateFile = (file: File): string | null => {
   }
 
   return null;
-};
-
-/**
- * Formats file size in human readable format
- * @param bytes File size in bytes
- * @returns Formatted string (e.g., "1.5 MB")
- */
-export const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) return '0 Bytes';
-
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
 /**

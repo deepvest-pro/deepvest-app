@@ -88,7 +88,7 @@ type TeamMember = {
   city?: string,
   is_founder: boolean,
   equity_percent?: number, // Percentage of the equity
-  roles: string[],
+  positions: string[], // Business positions/roles (CEO, CTO, Developer, etc.) - renamed from 'roles' to avoid confusion with user system roles
   status: "ghost" | "invited" | "active" | "inactive", // ghost is a user who not registered yet
   x_url?: string,
   is_x_verified?: boolean,

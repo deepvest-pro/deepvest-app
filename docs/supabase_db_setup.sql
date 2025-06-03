@@ -292,6 +292,7 @@ CREATE TABLE IF NOT EXISTS public.snapshots (
   banner_url TEXT,
   video_urls TEXT[],
   contents UUID[], -- Array of ProjectContent IDs
+  team_members UUID[], -- Array of TeamMember IDs
   author_id UUID NOT NULL REFERENCES auth.users(id), -- Refers to the user who created/owns this snapshot version
   is_locked BOOLEAN NOT NULL DEFAULT false, -- Indicates if snapshot can be edited (locked after publish)
   UNIQUE(project_id, version)
@@ -300,6 +301,7 @@ COMMENT ON TABLE public.snapshots IS 'Stores versioned snapshots of project data
 COMMENT ON COLUMN public.snapshots.author_id IS 'User who created this version of the snapshot.';
 COMMENT ON COLUMN public.snapshots.is_locked IS 'True if the snapshot is published and locked from further edits.';
 COMMENT ON COLUMN public.snapshots.contents IS 'Array of ProjectContent UUIDs associated with this snapshot.';
+COMMENT ON COLUMN public.snapshots.team_members IS 'Array of TeamMember UUIDs associated with this snapshot.';
 
 -- Foreign key constraints from projects to snapshots (defined after snapshots table)
 ALTER TABLE public.projects DROP CONSTRAINT IF EXISTS fk_public_snapshot_id;
@@ -624,6 +626,169 @@ COMMENT ON FUNCTION public.check_content_slug_availability(UUID, TEXT, UUID) IS 
 
 
 -- ==========================================
+-- Team Members ENUM Type & Table
+-- Manages team members for projects.
+-- ==========================================
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'team_member_status_enum') THEN
+    CREATE TYPE team_member_status_enum AS ENUM ('ghost', 'invited', 'active', 'inactive');
+  END IF;
+END$$;
+
+CREATE TABLE IF NOT EXISTS public.team_members (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL, -- Optional link to registered user
+  joined_at TIMESTAMP WITH TIME ZONE,
+  departed_at TIMESTAMP WITH TIME ZONE,
+  departed_reason TEXT,
+  name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  image_url TEXT,
+  country TEXT,
+  city TEXT,
+  is_founder BOOLEAN NOT NULL DEFAULT false,
+  equity_percent NUMERIC(5,2), -- Percentage with 2 decimal places (0.00 to 100.00)
+  positions TEXT[] NOT NULL DEFAULT '{}',
+  status team_member_status_enum NOT NULL DEFAULT 'active',
+  x_url TEXT,
+  is_x_verified BOOLEAN DEFAULT false,
+  github_url TEXT,
+  is_github_verified BOOLEAN DEFAULT false,
+  linkedin_url TEXT,
+  is_linkedin_verified BOOLEAN DEFAULT false,
+  pii_hash TEXT, -- Hash of PII data for KYC
+  author_id UUID NOT NULL REFERENCES auth.users(id), -- User who created this team member entry
+  deleted_at TIMESTAMP WITH TIME ZONE
+);
+COMMENT ON TABLE public.team_members IS 'Stores team member information for projects.';
+COMMENT ON COLUMN public.team_members.user_id IS 'Optional link to registered user account.';
+COMMENT ON COLUMN public.team_members.equity_percent IS 'Percentage of equity (0.00 to 100.00).';
+COMMENT ON COLUMN public.team_members.positions IS 'Array of role names for this team member.';
+COMMENT ON COLUMN public.team_members.status IS 'Current status of the team member.';
+COMMENT ON COLUMN public.team_members.author_id IS 'User who created this team member entry.';
+COMMENT ON COLUMN public.team_members.deleted_at IS 'Soft delete timestamp - member is hidden but not removed.';
+
+-- Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_team_members_project_id ON public.team_members(project_id);
+CREATE INDEX IF NOT EXISTS idx_team_members_user_id ON public.team_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_team_members_deleted_at ON public.team_members(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_team_members_author_id ON public.team_members(author_id);
+CREATE INDEX IF NOT EXISTS idx_team_members_status ON public.team_members(status);
+
+-- Trigger for team_members updated_at
+DROP TRIGGER IF EXISTS update_team_members_updated_at ON public.team_members;
+CREATE TRIGGER update_team_members_updated_at
+  BEFORE UPDATE ON public.team_members
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Enable RLS for team_members
+ALTER TABLE public.team_members ENABLE ROW LEVEL SECURITY;
+
+-- Policies for team_members
+DROP POLICY IF EXISTS "Public team members are viewable by everyone" ON public.team_members;
+CREATE POLICY "Public team members are viewable by everyone" ON public.team_members
+  FOR SELECT USING (
+    deleted_at IS NULL
+    AND EXISTS (
+      SELECT 1 FROM public.projects p 
+      WHERE p.id = team_members.project_id 
+      AND p.is_public = true 
+      AND p.is_archived = false
+    )
+  );
+COMMENT ON POLICY "Public team members are viewable by everyone" ON public.team_members IS 'Allows anyone to view team members from public, non-archived projects.';
+
+DROP POLICY IF EXISTS "Users with permissions can view project team members" ON public.team_members;
+CREATE POLICY "Users with permissions can view project team members" ON public.team_members
+  FOR SELECT USING (
+    deleted_at IS NULL
+    AND EXISTS (
+      SELECT 1 FROM public.project_permissions pp 
+      WHERE pp.project_id = team_members.project_id
+      AND pp.user_id = auth.uid()
+    )
+  );
+COMMENT ON POLICY "Users with permissions can view project team members" ON public.team_members IS 'Allows users with project permissions to view all non-deleted team members.';
+
+DROP POLICY IF EXISTS "Editors, Admins and Owners can create team members" ON public.team_members;
+CREATE POLICY "Editors, Admins and Owners can create team members" ON public.team_members
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.project_permissions pp 
+      WHERE pp.project_id = team_members.project_id
+      AND pp.user_id = auth.uid()
+      AND pp.role IN ('editor', 'admin', 'owner')
+    )
+    AND auth.uid() = team_members.author_id
+  );
+COMMENT ON POLICY "Editors, Admins and Owners can create team members" ON public.team_members IS 'Allows project editors, admins, or owners to create team members, ensuring they are the author.';
+
+DROP POLICY IF EXISTS "Authors and project admins can update team members" ON public.team_members;
+CREATE POLICY "Authors and project admins can update team members" ON public.team_members
+  FOR UPDATE USING (
+    deleted_at IS NULL
+    AND (
+      auth.uid() = team_members.author_id
+      OR EXISTS (
+        SELECT 1 FROM public.project_permissions pp 
+        WHERE pp.project_id = team_members.project_id
+        AND pp.user_id = auth.uid()
+        AND pp.role IN ('admin', 'owner')
+      )
+    )
+  );
+COMMENT ON POLICY "Authors and project admins can update team members" ON public.team_members IS 'Allows team member authors or project admins/owners to update team members.';
+
+DROP POLICY IF EXISTS "Authors and project admins can soft delete team members" ON public.team_members;
+CREATE POLICY "Authors and project admins can soft delete team members" ON public.team_members
+  FOR UPDATE USING (
+    deleted_at IS NULL
+    AND (
+      auth.uid() = team_members.author_id
+      OR EXISTS (
+        SELECT 1 FROM public.project_permissions pp 
+        WHERE pp.project_id = team_members.project_id
+        AND pp.user_id = auth.uid()
+        AND pp.role IN ('admin', 'owner')
+      )
+    )
+  )
+  WITH CHECK (
+    -- Allow setting deleted_at or updating other fields
+    (deleted_at IS NOT NULL OR deleted_at IS NULL)
+  );
+COMMENT ON POLICY "Authors and project admins can soft delete team members" ON public.team_members IS 'Allows team member authors or project admins/owners to soft delete team members by setting deleted_at.';
+
+-- Constraint to prevent deletion of team members in locked snapshots
+CREATE OR REPLACE FUNCTION public.check_team_member_locked_snapshot()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Check if team member is referenced in any locked snapshot
+  IF EXISTS (
+    SELECT 1 FROM public.snapshots s
+    WHERE s.project_id = OLD.project_id
+      AND s.is_locked = true
+      AND OLD.id = ANY(s.team_members)
+  ) THEN
+    RAISE EXCEPTION 'Cannot delete team member that is referenced in a locked snapshot';
+  END IF;
+  
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS prevent_locked_team_member_deletion ON public.team_members;
+CREATE TRIGGER prevent_locked_team_member_deletion
+  BEFORE DELETE ON public.team_members
+  FOR EACH ROW EXECUTE FUNCTION public.check_team_member_locked_snapshot();
+
+
+-- ==========================================
 -- Function to create a new project and assign owner
 -- ==========================================
 CREATE OR REPLACE FUNCTION public.create_project(
@@ -768,49 +933,6 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 COMMENT ON FUNCTION public.publish_project_draft(UUID, UUID) IS 'Publishes a project draft by setting public_snapshot_id and locking the snapshot. Only project owners can call this.';
 
 -- ==========================================
--- Function to publish project draft
--- ==========================================
-CREATE OR REPLACE FUNCTION public.publish_project_draft(
-  project_id UUID,
-  new_public_snapshot_id UUID
-)
-RETURNS VOID AS $$
-DECLARE
-  v_user_id UUID;
-BEGIN
-  v_user_id := auth.uid();
-  IF v_user_id IS NULL THEN
-    RAISE EXCEPTION 'User must be authenticated to publish draft';
-  END IF;
-  
-  -- Check if user is owner of the project
-  IF NOT EXISTS (
-    SELECT 1 FROM public.project_permissions pp 
-    WHERE pp.project_id = publish_project_draft.project_id 
-    AND pp.user_id = v_user_id
-    AND pp.role = 'owner'
-  ) THEN
-    RAISE EXCEPTION 'Only project owners can publish drafts';
-  END IF;
-  
-  -- Update project to set new public snapshot
-  UPDATE public.projects 
-  SET public_snapshot_id = new_public_snapshot_id
-  WHERE id = project_id;
-  
-  -- Lock the snapshot
-  UPDATE public.snapshots 
-  SET is_locked = true
-  WHERE id = new_public_snapshot_id;
-  
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-COMMENT ON FUNCTION public.publish_project_draft(UUID, UUID) IS 'Publishes a project draft by setting public_snapshot_id and locking the snapshot. Only project owners can call this.';
-
--- Removed old policy for projects: DROP POLICY IF EXISTS "Users with permissions can view projects" ON public.projects;
--- This was replaced by the combination of "Public projects are viewable by everyone" and "Owners can view their non-archived projects".
-
--- ==========================================
 -- Storage Policies for project-files bucket
 -- ==========================================
 -- Note: These policies should be created in Supabase Dashboard > Storage > Policies
@@ -889,3 +1011,65 @@ USING (
 -- Notes on ENUMs:
 -- To add a new value to an ENUM later: ALTER TYPE project_status_enum ADD VALUE 'new_status_value';
 -- (This needs to be done manually or via a separate migration script if the script is re-runnable)
+
+-- ==========================================
+-- Function to soft delete team member (bypasses RLS)
+-- ==========================================
+CREATE OR REPLACE FUNCTION public.soft_delete_team_member(
+  p_member_id UUID,
+  p_project_id UUID,
+  p_user_id UUID
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_team_member RECORD;
+  v_user_role TEXT;
+  v_can_delete BOOLEAN := FALSE;
+BEGIN
+  -- Get team member details
+  SELECT * INTO v_team_member
+  FROM public.team_members
+  WHERE id = p_member_id 
+    AND project_id = p_project_id 
+    AND deleted_at IS NULL;
+    
+  IF NOT FOUND THEN
+    RETURN FALSE; -- Team member not found
+  END IF;
+  
+  -- Check if user is the author
+  IF v_team_member.author_id = p_user_id THEN
+    v_can_delete := TRUE;
+  ELSE
+    -- Check if user has admin/owner role
+    SELECT role INTO v_user_role
+    FROM public.project_permissions
+    WHERE project_id = p_project_id 
+      AND user_id = p_user_id;
+      
+    IF v_user_role IN ('admin', 'owner') THEN
+      v_can_delete := TRUE;
+    END IF;
+  END IF;
+  
+  IF NOT v_can_delete THEN
+    RETURN FALSE; -- Insufficient permissions
+  END IF;
+  
+  -- Perform soft delete
+  UPDATE public.team_members
+  SET deleted_at = NOW(),
+      updated_at = NOW()
+  WHERE id = p_member_id 
+    AND project_id = p_project_id 
+    AND deleted_at IS NULL;
+    
+  RETURN TRUE;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.soft_delete_team_member(UUID, UUID, UUID) TO authenticated;
+COMMENT ON FUNCTION public.soft_delete_team_member(UUID, UUID, UUID) IS 'Soft deletes a team member, bypassing RLS policies with proper permission checks.';

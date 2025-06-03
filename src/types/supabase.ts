@@ -109,6 +109,7 @@ type SnapshotFields = {
   banner_url: string | null;
   video_urls: string[] | null;
   contents: UUID[] | null;
+  team_members: UUID[] | null;
   author_id: UUID | ExpandedUser;
   is_locked: boolean;
 };
@@ -254,7 +255,10 @@ export type ContentType =
   | 'case_study'
   | 'other';
 
-// Project content fields
+// Team member status enum
+export type TeamMemberStatus = 'ghost' | 'invited' | 'active' | 'inactive';
+
+// Project content fields without common fields
 type ProjectContentFields = {
   project_id: UUID;
   slug: string;
@@ -268,19 +272,75 @@ type ProjectContentFields = {
   deleted_at: string | null;
 };
 
-// Project content row type
+// Define project content row type
 export type ProjectContentRow = CommonTableFields & ProjectContentFields;
 
-// Project content type
+// Export project content type for backward compatibility
 export type ProjectContent = ProjectContentRow;
 
-// Project content with author info
+// Project content with author information
 export type ProjectContentWithAuthor = ProjectContent & {
   author?: {
     id: string;
     full_name: string | null;
     email: string;
   } | null;
+};
+
+// Team member fields without common fields
+type TeamMemberFields = {
+  project_id: UUID;
+  user_id: UUID | null;
+  joined_at: Timestamp | null;
+  departed_at: Timestamp | null;
+  departed_reason: string | null;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  image_url: string | null;
+  country: string | null;
+  city: string | null;
+  is_founder: boolean;
+  equity_percent: number | null;
+  positions: string[];
+  status: TeamMemberStatus;
+  x_url: string | null;
+  is_x_verified: boolean;
+  github_url: string | null;
+  is_github_verified: boolean;
+  linkedin_url: string | null;
+  is_linkedin_verified: boolean;
+  pii_hash: string | null;
+  author_id: UUID;
+  deleted_at: Timestamp | null;
+};
+
+// Define team member row type
+export type TeamMemberRow = CommonTableFields & TeamMemberFields;
+
+// Export team member type for backward compatibility
+export type TeamMember = TeamMemberRow;
+
+// Define team member insert type
+type TeamMemberInsert = Partial<Omit<CommonTableFields, 'id'>> &
+  Pick<TeamMemberFields, 'project_id' | 'name' | 'author_id'> &
+  Partial<Omit<TeamMemberFields, 'project_id' | 'name' | 'author_id'>>;
+
+// Define team member update type
+type TeamMemberUpdate = Partial<TeamMemberRow>;
+
+// Team member with author information
+export type TeamMemberWithAuthor = TeamMember & {
+  author?: {
+    id: string;
+    full_name: string | null;
+    email: string;
+  } | null;
+};
+
+// Team member with linked user profile
+export type TeamMemberWithUser = TeamMember & {
+  user?: UserProfile | null;
 };
 
 // Database interface using the reusable types
@@ -302,6 +362,9 @@ export interface Database {
         ProjectPermissionInsert,
         ProjectPermissionUpdate
       >;
+
+      // Team Members
+      team_members: TableDefinition<TeamMemberRow, TeamMemberInsert, TeamMemberUpdate>;
     };
     Views: {
       [_ in never]: never;
@@ -326,6 +389,7 @@ export interface Database {
     Enums: {
       project_status_enum: ProjectStatus;
       project_role_enum: ProjectRole;
+      team_member_status_enum: TeamMemberStatus;
     };
   };
   storage: {

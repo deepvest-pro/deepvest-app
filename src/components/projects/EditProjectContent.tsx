@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
@@ -17,15 +17,11 @@ import {
   AspectRatio,
   Badge,
 } from '@radix-ui/themes';
-import {
-  CalendarIcon,
-  RocketIcon,
-  ArrowLeftIcon,
-  EyeOpenIcon,
-  EyeClosedIcon,
-} from '@radix-ui/react-icons';
-import { ProjectWithSnapshot, ProjectRole, ProjectPermission } from '@/types/supabase';
+import { CalendarIcon, ArrowLeftIcon, EyeOpenIcon, EyeClosedIcon } from '@radix-ui/react-icons';
+import { ProjectWithSnapshot, ProjectPermission, TeamMember } from '@/types/supabase';
+import { formatDate } from '@/lib/utils/format';
 import { useToastHelpers } from '@/components/layout/ToastProvider';
+import { StatusBadge } from '@/components/ui/StatusBadge';
 
 // Import section components
 import {
@@ -36,7 +32,7 @@ import { CommonInfoSection } from '@/components/forms/EditProjectSections/Common
 import { DocumentsSection } from '@/components/forms/EditProjectSections/DocumentsSection';
 import { FundingSection } from '@/components/forms/EditProjectSections/FundingSection';
 import { MilestonesSection } from '@/components/forms/EditProjectSections/MilestonesSection';
-import { TeamSection } from '@/components/forms/EditProjectSections/TeamSection';
+import { TeamMembersSection } from '@/components/forms/EditProjectSections/TeamMembersSection';
 
 // Type for project with details (matching getProjectWithDetails return)
 type ProjectWithDetails = ProjectWithSnapshot & {
@@ -45,16 +41,9 @@ type ProjectWithDetails = ProjectWithSnapshot & {
 
 interface EditProjectContentProps {
   project: ProjectWithDetails;
-  userFullName?: string;
-  userEmail?: string;
-  userRole?: ProjectRole | null;
 }
 
-export function EditProjectContent({
-  project,
-  userFullName = '',
-  userEmail = '',
-}: EditProjectContentProps) {
+export function EditProjectContent({ project }: EditProjectContentProps) {
   const searchParams = useSearchParams();
   const { success } = useToastHelpers();
 
@@ -64,6 +53,8 @@ export function EditProjectContent({
   // State for tracking completed sections and loading states
   const [completedSections, setCompletedSections] = useState<Set<ProjectSection>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [teamLoading, setTeamLoading] = useState(false);
 
   // Get current snapshot data for editing
   const isEditingDraft =
@@ -75,6 +66,30 @@ export function EditProjectContent({
   const projectStatus = currentSnapshot?.status || 'idea';
   const logoUrl = currentSnapshot?.logo_url;
   const bannerUrl = currentSnapshot?.banner_url;
+
+  const loadTeamMembers = useCallback(async () => {
+    setTeamLoading(true);
+    try {
+      const response = await fetch(`/api/projects/${project.id}/team-members`);
+      if (response.ok) {
+        const data = await response.json();
+        setTeamMembers(data.team_members || []);
+      } else {
+        console.error('Failed to load team members');
+      }
+    } catch (error) {
+      console.error('Error loading team members:', error);
+    } finally {
+      setTeamLoading(false);
+    }
+  }, [project.id]);
+
+  // Load team members when component mounts or when switching to team section
+  useEffect(() => {
+    if (currentSection === 'team') {
+      loadTeamMembers();
+    }
+  }, [currentSection, project.id, loadTeamMembers]);
 
   // Prepare initial data for sections
   const commonInfoData = {
@@ -102,62 +117,6 @@ export function EditProjectContent({
 
   const milestonesData = {
     milestones: [], // Not stored in DB yet
-  };
-
-  const teamData = {
-    teamMembers: [
-      {
-        name: userFullName,
-        email: userEmail,
-        role: 'Owner',
-        isFounder: true,
-      },
-    ],
-    inviteCollaborators: [],
-  };
-
-  // Format date to be more readable
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
-
-  // Format status for display
-  const formatStatus = (status: string) => {
-    return status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
-  };
-
-  // Get status color
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'idea':
-        return 'gray';
-      case 'concept':
-        return 'blue';
-      case 'prototype':
-        return 'cyan';
-      case 'mvp':
-        return 'green';
-      case 'beta':
-        return 'yellow';
-      case 'launched':
-        return 'orange';
-      case 'growing':
-        return 'red';
-      case 'scaling':
-        return 'purple';
-      case 'established':
-        return 'indigo';
-      case 'acquired':
-        return 'pink';
-      case 'closed':
-        return 'gray';
-      default:
-        return 'gray';
-    }
   };
 
   // Generic save handler for all sections
@@ -194,13 +153,6 @@ export function EditProjectContent({
           // For now, milestones data is not saved to DB as the schema doesn't support it yet
           console.log('Milestones data (not saved to DB yet):', data);
           success('Milestones saved locally (DB schema update needed)');
-          setCompletedSections(prev => new Set([...prev, sectionId]));
-          return;
-
-        case 'team':
-          // For now, team data is not saved to DB as the schema doesn't support it yet
-          console.log('Team data (not saved to DB yet):', data);
-          success('Team information saved locally (DB schema update needed)');
           setCompletedSections(prev => new Set([...prev, sectionId]));
           return;
 
@@ -290,11 +242,11 @@ export function EditProjectContent({
 
       case 'team':
         return (
-          <TeamSection
-            initialData={teamData}
+          <TeamMembersSection
             projectId={project.id}
-            onSave={data => handleSectionSave('team', data)}
-            isLoading={isLoading}
+            teamMembers={teamMembers}
+            onTeamMembersChange={setTeamMembers}
+            isLoading={teamLoading}
           />
         );
 
@@ -397,17 +349,13 @@ export function EditProjectContent({
                 {/* Project Status */}
                 <Heading size="3">Project Status</Heading>
                 <Flex direction="column" gap="2">
-                  <Badge
-                    color={getStatusColor(projectStatus)}
+                  <StatusBadge
+                    status={projectStatus}
+                    type="project"
                     size="2"
                     variant="soft"
-                    radius="full"
-                  >
-                    <Flex gap="1" align="center">
-                      <RocketIcon />
-                      <Text>{formatStatus(projectStatus)}</Text>
-                    </Flex>
-                  </Badge>
+                    showIcon={true}
+                  />
 
                   <Flex gap="2" align="center">
                     {project.is_public ? (

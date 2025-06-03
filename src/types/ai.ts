@@ -37,6 +37,14 @@ export interface ProjectDataFromAI {
     | 'closed';
   country?: string;
   city?: string;
+  team?: TeamMemberFromAI[];
+}
+
+// Team member data extracted from AI
+export interface TeamMemberFromAI {
+  name: string;
+  email?: string;
+  positions: string[];
 }
 
 // Gemini API types (reused from transcribe)

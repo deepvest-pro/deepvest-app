@@ -22,17 +22,61 @@ export const PROMPTS = {
   "slogan": "Short catchy slogan (optional, max 200 characters)",
   "status": "idea|concept|prototype|mvp|beta|launched|growing|scaling|established|acquired|closed",
   "country": "Country name if mentioned (optional)",
-  "city": "City name if mentioned (optional)"
+  "city": "City name if mentioned (optional)",
+  "team": [
+    {
+      "name": "Full name of team member",
+      "email": "Email address if mentioned (optional)",
+      "positions": ["CEO", "CTO", "Developer"] // Array of business roles/positions (NOT technical skills)
+    }
+  ]
 }
 
-Rules:
+Rules for project data:
 1. Extract the most relevant project name from the content
 2. Create a comprehensive description that captures the essence of the project
 3. Determine the most appropriate status based on the content
 4. Only include country/city if explicitly mentioned
 5. If no clear slogan exists, omit the field
 6. Ensure all text is clean and professional
-7. Return ONLY the JSON object, no markdown formatting or explanations
+
+Rules for team extraction:
+1. Look for team/about us/founders/people sections in the presentation
+2. Extract all mentioned team members with their names and roles
+3. If email addresses are mentioned, include them
+4. **IMPORTANT - Position Detection Rules:**
+   - **Business Positions**: CEO, CTO, CPO, CMO, CFO, COO, Founder, Co-founder, Product Manager, Project Manager, Business Development, Marketing Manager, Sales Manager, Designer, UX/UI Designer, Data Scientist, DevOps Engineer, QA Engineer, etc.
+   - **Technical Skills vs Positions**: 
+     * Programming languages (React, Vue, Python, JavaScript, C#, Java, etc.) are NOT positions
+     * Frameworks and technologies (Node.js, Django, Angular, etc.) are NOT positions
+     * If someone is listed with only technical skills, infer their likely position:
+      - Frontend technologies (React, Vue, Angular, HTML, CSS) → "Frontend Developer"
+      - Backend technologies (Python, Node.js, Django, Express) → "Backend Developer"  
+      - Mobile technologies (React Native, Flutter, Swift, Kotlin) → "Mobile Developer"
+      - Data technologies (Python, R, SQL, Machine Learning) → "Data Scientist" or "Data Engineer"
+      - DevOps technologies (Docker, Kubernetes, AWS, CI/CD) → "DevOps Engineer"
+      - Multiple technologies across stack → "Full Stack Developer"
+   - **Context Clues**: Use surrounding text, descriptions, or context to infer actual business roles
+   - **Default Inference**: If no clear position is mentioned but technical skills are listed, use "Developer" as fallback
+5. If the current user ({{USER_NAME}} <{{USER_EMAIL}}>) is found in the presentation:
+  - Include their existing roles from the presentation (applying position detection rules above)
+  - Always add "CEO" to their positions array (even if not mentioned)
+  - Use their actual email ({{USER_EMAIL}}) even if different email is in presentation
+6. If the current user is NOT found in the presentation, do not include them in the team array
+7. If no team information is found, return an empty team array
+
+**Examples of position inference:**
+- "John Smith - React, TypeScript, Node.js" → positions: ["Full Stack Developer"]
+- "Jane Doe - Python, Machine Learning, Data Analysis" → positions: ["Data Scientist"]
+- "Mike Johnson - Founder, React Developer" → positions: ["Founder", "Frontend Developer"]
+- "Sarah Wilson - Product Design, Figma, UX Research" → positions: ["Product Designer"]
+- "Alex Brown - DevOps, AWS, Docker, Kubernetes" → positions: ["DevOps Engineer"]
+
+Current user context:
+- Name: {{USER_NAME}}
+- Email: {{USER_EMAIL}}
+
+Return ONLY the JSON object, no markdown formatting or explanations.
 
 Content to analyze:`,
 
