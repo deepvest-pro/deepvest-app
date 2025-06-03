@@ -1,0 +1,43 @@
+// Breakpoints
+$breakpoints: (
+  'mobile': 480px,
+  'tablet': 768px,
+  'desktop': 1024px,
+  'wide': 1280px,
+  'ultra-wide': 1600px,
+);
+
+// Mobile: 0 - 480px
+@mixin mobile {
+  @media (max-width: 480px) {
+    @content;
+  }
+}
+
+// Tablet: 481px - 768px
+@mixin tablet {
+  @media (min-width: 481px) and (max-width: 768px) {
+    @content;
+  }
+}
+
+// Desktop: 769px - 1024px
+@mixin desktop {
+  @media (min-width: 769px) and (max-width: 1024px) {
+    @content;
+  }
+}
+
+// Wide: 1025px and up
+@mixin wide {
+  @media (min-width: 1025px) {
+    @content;
+  }
+}
+
+// Custom breakpoint
+@mixin breakpoint($point) {
+  @media (min-width: $point) {
+    @content;
+  }
+}

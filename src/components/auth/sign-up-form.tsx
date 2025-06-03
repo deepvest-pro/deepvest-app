@@ -7,9 +7,13 @@ import { Box, Container, Flex, Text, Heading, Button } from '@radix-ui/themes';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { signUpSchema, type SignUpCredentials } from '@/lib/validations/auth';
 import { useSignUp } from '@/lib/auth/auth-hooks';
+import { useToast } from '@/components/layout/ToastProvider';
+import { useRouter } from 'next/navigation';
 
 export function SignUpForm() {
   const { signUp, isLoading, error } = useSignUp();
+  const { toast } = useToast();
+  const router = useRouter();
   const [success, setSuccess] = useState(false);
 
   const {
@@ -31,6 +35,17 @@ export function SignUpForm() {
 
     if (result.success) {
       setSuccess(true);
+      toast(
+        'Please check your email for a verification link. You will need to verify your email before signing in.',
+        'success',
+        'Email Verification Sent',
+      );
+      // Redirect after a short delay to let the user see the toast
+      setTimeout(() => {
+        router.push('/auth/sign-in');
+      }, 4000);
+    } else if (error) {
+      toast(error, 'error', 'Registration Failed');
     }
   };
 
@@ -69,19 +84,6 @@ export function SignUpForm() {
 
         <form onSubmit={handleSubmit(onSubmit)}>
           <Flex direction="column" gap="4">
-            {error && (
-              <Box
-                p="3"
-                style={{
-                  backgroundColor: 'var(--red-3)',
-                  color: 'var(--red-11)',
-                  borderRadius: '6px',
-                }}
-              >
-                <Text size="2">{error}</Text>
-              </Box>
-            )}
-
             <Box>
               <Text
                 as="label"

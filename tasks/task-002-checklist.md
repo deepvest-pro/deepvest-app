@@ -15,12 +15,12 @@
 - [x] Implement user profile fetching
   - [x] Create hook to fetch user profile data
   - [x] Handle loading and error states
-  - [ ] Show toast notifications for profile loading errors
+  - [x] Show toast notifications for profile loading errors
 - [x] Implement profile update functionality
   - [x] Create form for updating profile
   - [x] Implement validation with Zod
   - [x] Ensure proper error handling
-  - [ ] Add toast notifications for successful profile updates and validation errors
+  - [x] Add toast notifications for successful profile updates and validation errors
 
 ## Authentication Flows
 
@@ -28,15 +28,15 @@
   - [x] Create proper server action for sign-up
   - [x] Implement client-side validation
   - [x] Set up automatic profile creation on sign-up
-  - [ ] Add toast notifications for successful registration and errors
+  - [x] Add toast notifications for successful registration and errors
 - [x] Implement sign-in functionality
   - [x] Create proper server action for sign-in
   - [x] Handle authentication errors
-  - [ ] Display toast notifications for successful login and authentication errors
+  - [x] Display toast notifications for successful login and authentication errors
 - [x] Implement sign-out functionality
   - [x] Create server action for sign-out
   - [x] Handle redirection after sign-out
-  - [ ] Show toast notification for successful logout
+  - [x] Show toast notification for successful logout
 - [x] Implement password reset flow
   - [x] Create UI for password reset request
   - [x] Implement password reset completion
@@ -114,18 +114,18 @@
 
 ## Toast Notifications System
 
-- [ ] Set up Toast component infrastructure
-  - [ ] Install Radix UI Toast package
-  - [ ] Create base Toast component with appropriate styling
-  - [ ] Implement ToastProvider at app root level
-  - [ ] Set up swipe-to-dismiss functionality for mobile
-- [ ] Create Toast helper utilities
-  - [ ] Implement useToast hook for component access
-  - [ ] Create toast notification functions (success, error, info, warning)
-  - [ ] Add configuration for toast duration and positioning
-  - [ ] Implement queuing mechanism for multiple toasts
-- [ ] Ensure accessibility
-  - [ ] Add appropriate ARIA labels and roles
-  - [ ] Implement keyboard navigation and dismissal
-  - [ ] Test with screen readers
-  - [ ] Ensure proper focus management for toasts
+- [x] Set up Toast component infrastructure
+  - [x] Install Radix UI Toast package
+  - [x] Create base Toast component with appropriate styling
+  - [x] Implement ToastProvider at app root level
+  - [x] Set up swipe-to-dismiss functionality for mobile
+- [x] Create Toast helper utilities
+  - [x] Implement useToast hook for component access
+  - [x] Create toast notification functions (success, error, info, warning)
+  - [x] Add configuration for toast duration and positioning
+  - [x] Implement queuing mechanism for multiple toasts
+- [x] Ensure accessibility
+  - [x] Add appropriate ARIA labels and roles
+  - [x] Implement keyboard navigation and dismissal
+  - [x] Test with screen readers
+  - [x] Ensure proper focus management for toasts

@@ -32,9 +32,11 @@ $z-index-dropdown: 1000;
 $z-index-modal: 1500;
 $z-index-tooltip: 2000;
 
-// Export as module
+// Экспорт как модуль удален, так как он вызывает ошибку компиляции
+/* :export блок не поддерживается стандартным SCSS компилятором
 :export {
   primaryBlue: $primary-blue;
   breakpointSm: $breakpoint-sm;
   breakpointMd: $breakpoint-md;
 }
+*/

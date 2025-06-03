@@ -5,6 +5,7 @@ import { getSession, getUserData } from '@/lib/react-query/auth-actions';
 import { NavBar, RootLayoutContent } from '@/components/layout';
 
 import '../styles/global/globals.css';
+import '../styles/app.scss';
 
 export const metadata: Metadata = {
   title: 'DeepVest - Investment Platform',

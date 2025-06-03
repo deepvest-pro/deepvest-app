@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import Link from 'next/link';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -8,10 +7,11 @@ import { Box, Container, Flex, Text, Heading, Button } from '@radix-ui/themes';
 import { signInSchema, type SignInCredentials } from '@/lib/validations/auth';
 import { useSignIn } from '@/lib/auth/auth-hooks';
 import { OAuthButtons } from './oauth-buttons';
+import { useToast } from '@/components/layout/ToastProvider';
 
 export function SignInForm() {
   const { signIn, isLoading, error } = useSignIn();
-  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const { toast } = useToast();
 
   const {
     register,
@@ -29,7 +29,9 @@ export function SignInForm() {
     const result = await signIn(data);
 
     if (result.success) {
-      setShowSuccessMessage(true);
+      toast('Successfully signed in!', 'success', 'Welcome back');
+    } else if (error) {
+      toast(error, 'error', 'Sign in failed');
     }
   };
 
@@ -63,32 +65,6 @@ export function SignInForm() {
 
         <form onSubmit={handleSubmit(onSubmit)}>
           <Flex direction="column" gap="4">
-            {error && (
-              <Box
-                p="3"
-                style={{
-                  backgroundColor: 'var(--red-3)',
-                  color: 'var(--red-11)',
-                  borderRadius: '6px',
-                }}
-              >
-                <Text size="2">{error}</Text>
-              </Box>
-            )}
-
-            {showSuccessMessage && (
-              <Box
-                p="3"
-                style={{
-                  backgroundColor: 'var(--green-3)',
-                  color: 'var(--green-11)',
-                  borderRadius: '6px',
-                }}
-              >
-                <Text size="2">Successfully signed in!</Text>
-              </Box>
-            )}
-
             <Box>
               <Text
                 as="label"

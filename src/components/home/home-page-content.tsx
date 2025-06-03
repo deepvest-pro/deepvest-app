@@ -3,6 +3,7 @@
 import { ReactNode } from 'react';
 import Link from 'next/link';
 import { Container, Flex, Heading, Text, Grid, Card, Box, Button } from '@radix-ui/themes';
+import { ToastTester } from './ToastTester';
 
 interface HomePageContentProps {
   isAuthenticated: boolean;
@@ -57,6 +58,8 @@ export function HomePageContent({ isAuthenticated, authStatusContent }: HomePage
             </Link>
           </Flex>
         )}
+
+        <ToastTester />
       </Flex>
 
       <Grid columns={{ initial: '1', md: '3' }} gap="6" mt="9">
