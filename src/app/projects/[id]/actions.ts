@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import type { Database } from '@/types/supabase';
-import { checkUserProjectRole } from '@/lib/supabase/helpers';
+import { checkUserProjectRole, deleteProjectFiles } from '@/lib/supabase/helpers';
 import { createSupabaseServerClient } from '@/lib/supabase/client'; // New client
 
 interface ToggleProjectPublicationArgs {
@@ -277,6 +277,18 @@ export async function deleteProject({ projectId }: DeleteProjectArgs): Promise<{
     }
 
     console.log(`[Action] User ${user.id} is confirmed owner of project ${projectId}`);
+
+    // Delete project files from storage first
+    console.log(`[Action] Deleting project files for project ${projectId}`);
+    const { success: filesDeleted, error: filesError } = await deleteProjectFiles(projectId);
+
+    if (!filesDeleted) {
+      console.error('[Action] Failed to delete project files:', filesError);
+      // Continue with project deletion even if file deletion fails
+      // This prevents orphaned database records
+    } else {
+      console.log(`[Action] Project files deleted successfully for project ${projectId}`);
+    }
 
     // Delete project directly using Supabase (will cascade delete permissions and snapshots due to DB constraints)
     const { error: deleteError } = await supabase.from('projects').delete().eq('id', projectId);

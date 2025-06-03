@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
-import { checkUserProjectRole, getProjectWithDetails, updateProject } from '@/lib/supabase/helpers';
+import {
+  checkUserProjectRole,
+  getProjectWithDetails,
+  updateProject,
+  deleteProjectFiles,
+} from '@/lib/supabase/helpers';
 import { createSupabaseServerClient } from '@/lib/supabase/client';
 import { updateProjectSchema } from '@/lib/validations/project';
 import { z } from 'zod';
@@ -159,6 +164,15 @@ export async function DELETE(request: Request, { params }: RouteContext) {
       { error: 'Only the project owner can delete this project' },
       { status: 403 },
     );
+  }
+
+  // Delete project files from storage first
+  const { success: filesDeleted, error: filesError } = await deleteProjectFiles(id);
+
+  if (!filesDeleted) {
+    console.error('Failed to delete project files:', filesError);
+    // Continue with project deletion even if file deletion fails
+    // This prevents orphaned database records
   }
 
   // Delete project (will cascade delete permissions and snapshots due to DB constraints)

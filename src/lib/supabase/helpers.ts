@@ -830,3 +830,93 @@ export async function addUserToProject(projectId: string, userEmail: string, rol
   // Use the new function to add user by ID
   return await addUserToProjectById(projectId, userData.id, role);
 }
+
+/**
+ * Deletes all files in a project folder from storage
+ */
+export async function deleteProjectFiles(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+
+  try {
+    // Helper function to recursively list all files in a folder
+    const listAllFiles = async (folderPath: string): Promise<string[]> => {
+      const { data: items, error } = await supabase.storage.from('project-files').list(folderPath, {
+        limit: 1000,
+        sortBy: { column: 'name', order: 'asc' },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (!items || items.length === 0) {
+        return [];
+      }
+
+      const allFiles: string[] = [];
+
+      for (const item of items) {
+        const itemPath = folderPath ? `${folderPath}/${item.name}` : item.name;
+
+        // Try to list contents of this item to see if it's a folder
+        const { data: subItems, error: subError } = await supabase.storage
+          .from('project-files')
+          .list(itemPath, { limit: 1 });
+
+        if (!subError && subItems && subItems.length > 0) {
+          // This is a folder, get all files from it recursively
+          const subFiles = await listAllFiles(itemPath);
+          allFiles.push(...subFiles);
+        } else {
+          // This is a file (or empty folder, which we can treat as a file)
+          allFiles.push(itemPath);
+        }
+      }
+
+      return allFiles;
+    };
+
+    console.log(`Starting deletion of files for project ${projectId}`);
+
+    // List all files in the project folder recursively
+    const allFiles = await listAllFiles(projectId);
+
+    if (allFiles.length === 0) {
+      console.log(`No files found for project ${projectId}`);
+      return { success: true, error: null };
+    }
+
+    console.log(`Found ${allFiles.length} files to delete for project ${projectId}:`, allFiles);
+
+    // Delete files in batches to avoid potential issues with large numbers of files
+    const batchSize = 100;
+    const batches = [];
+    for (let i = 0; i < allFiles.length; i += batchSize) {
+      batches.push(allFiles.slice(i, i + batchSize));
+    }
+
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      console.log(`Deleting batch ${i + 1}/${batches.length} (${batch.length} files)`);
+
+      const { error: deleteError } = await supabase.storage.from('project-files').remove(batch);
+
+      if (deleteError) {
+        console.error(`Error deleting batch ${i + 1}:`, deleteError);
+        return { success: false, error: `Failed to delete files: ${deleteError.message}` };
+      }
+    }
+
+    console.log(`Successfully deleted all files for project ${projectId}`);
+    return { success: true, error: null };
+  } catch (error) {
+    console.error('Unexpected error deleting project files:', error);
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'An unexpected error occurred while deleting project files',
+    };
+  }
+}
