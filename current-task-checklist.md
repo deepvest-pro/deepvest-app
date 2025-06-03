@@ -125,3 +125,45 @@ The implementation is complete and ready for:
 - Followed the same pattern as the working `src/app/api/profile/image-upload/route.ts`
 
 **Testing**: The endpoint now properly authenticates users and should handle file uploads without 401 errors.
+
+# Task Progress Checklist: Project Page Button Changes
+
+## Checkpoints:
+
+- [x] 1. Find and analyze project view page components
+- [x] 2. Find and analyze project edit page components
+- [x] 3. Change "Publish Draft" button text to "Save Changes"
+- [x] 4. Change "Publish" button logic to "Make Public"/"Make Private" with dynamic text
+- [x] 5. Move "Delete Project" button to edit page left column under Project Status
+- [x] 6. Verify functionality of all changed buttons
+- [x] 7. Run linter to check for errors
+- [x] 8. Build project for final verification
+
+## Current Status: ✅ COMPLETED
+
+## Implemented Changes:
+
+### 1. Project View Page (ProjectContent.tsx):
+
+- ✅ Changed "Publish Draft" button text → "Save Changes"
+- ✅ Changed "Publish"/"Unpublish" button text → "Make Public"/"Make Private"
+- ✅ Removed "Delete Project" button from actions list
+- ✅ Removed delete confirmation dialog
+- ✅ Cleaned up unused imports
+
+### 2. Project Edit Page (EditProjectContent.tsx):
+
+- ✅ Added "Delete Project" button to left column under "Project Status" block
+- ✅ Added project deletion confirmation dialog
+- ✅ Added user permission logic (only owner can delete)
+- ✅ Added necessary imports and state management
+
+### 3. Quality Checks:
+
+- ✅ Linter: 0 errors
+- ✅ Project build: successful
+- ✅ TypeScript: no compilation errors
+
+## Result:
+
+All required changes have been successfully implemented. Buttons have correct English names, functionality moved according to requirements.

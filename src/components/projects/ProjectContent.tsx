@@ -3,7 +3,6 @@
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 import {
   Box,
   Container,
@@ -17,7 +16,6 @@ import {
   Separator,
   AspectRatio,
   Badge,
-  AlertDialog,
 } from '@radix-ui/themes';
 import {
   InfoCircledIcon,
@@ -29,7 +27,6 @@ import {
   EyeOpenIcon,
   EyeClosedIcon,
   CalendarIcon,
-  TrashIcon,
 } from '@radix-ui/react-icons';
 import {
   ProjectWithSnapshot,
@@ -37,7 +34,7 @@ import {
   ProjectContentWithAuthor,
   TeamMember,
 } from '@/types/supabase';
-import { toggleProjectPublication, publishDraft, deleteProject } from '@/app/projects/[id]/actions';
+import { toggleProjectPublication, publishDraft } from '@/app/projects/[id]/actions';
 import { useProjectData, useProjectPermissions } from '@/lib/hooks/useProjectData';
 import { getInitials } from '@/lib/utils/format';
 import { ProjectStatusBadge } from '@/components/ui/StatusBadge';
@@ -64,9 +61,7 @@ export function ProjectContent({
   const [documents] = useState<ProjectContentWithAuthor[]>(initialDocuments);
   const [team] = useState<TeamMember[]>(initialTeam);
   const [isPending, startTransition] = useTransition();
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const { success: toastSuccess, error: toastError } = useToastHelpers();
-  const router = useRouter();
 
   // Use custom hooks for data processing
   const projectData = useProjectData(project);
@@ -211,7 +206,7 @@ export function ProjectContent({
                       }}
                       disabled={isPending}
                     >
-                      {isPending ? 'Publishing...' : 'Publish Draft'}
+                      {isPending ? 'Saving...' : 'Save Changes'}
                     </Button>
                   )}
 
@@ -259,11 +254,11 @@ export function ProjectContent({
                       {projectData.isPublic ? <EyeClosedIcon /> : <GlobeIcon />}
                       {isPending
                         ? projectData.isPublic
-                          ? 'Unpublishing...'
-                          : 'Publishing...'
+                          ? 'Making Private...'
+                          : 'Making Public...'
                         : projectData.isPublic
-                          ? 'Unpublish'
-                          : 'Publish'}
+                          ? 'Make Private'
+                          : 'Make Public'}
                     </Button>
                   )}
 
@@ -274,20 +269,6 @@ export function ProjectContent({
                         Edit Project
                       </Button>
                     </Link>
-                  )}
-
-                  {permissions.isOwner && (
-                    <Button
-                      variant="soft"
-                      color="red"
-                      size="2"
-                      style={{ width: '100%' }}
-                      onClick={() => setShowDeleteDialog(true)}
-                      disabled={isPending}
-                    >
-                      <TrashIcon />
-                      Delete Project
-                    </Button>
                   )}
                 </Flex>
               </Flex>
@@ -404,55 +385,6 @@ export function ProjectContent({
           {/* For example: milestones, funding rounds, etc. */}
         </Box>
       </Grid>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog.Root open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialog.Content style={{ maxWidth: 450 }}>
-          <AlertDialog.Title>Delete Project</AlertDialog.Title>
-          <AlertDialog.Description size="2">
-            Are you sure you want to delete &ldquo;{projectData.name}&rdquo;? This action cannot be
-            undone and will permanently remove the project and all its data.
-          </AlertDialog.Description>
-
-          <Flex gap="3" mt="4" justify="end">
-            <AlertDialog.Cancel>
-              <Button variant="soft" color="gray">
-                Cancel
-              </Button>
-            </AlertDialog.Cancel>
-            <AlertDialog.Action>
-              <Button
-                variant="solid"
-                color="red"
-                onClick={() => {
-                  startTransition(async () => {
-                    try {
-                      const result = await deleteProject({
-                        projectId: project.id,
-                      });
-
-                      if (result.success) {
-                        toastSuccess('Project deleted successfully');
-                        router.push('/projects');
-                      } else {
-                        toastError(result.error || 'Failed to delete project');
-                        setShowDeleteDialog(false);
-                      }
-                    } catch (error) {
-                      console.error('Delete project error:', error);
-                      toastError('An unexpected error occurred while deleting project.');
-                      setShowDeleteDialog(false);
-                    }
-                  });
-                }}
-                disabled={isPending}
-              >
-                {isPending ? 'Deleting...' : 'Delete Project'}
-              </Button>
-            </AlertDialog.Action>
-          </Flex>
-        </AlertDialog.Content>
-      </AlertDialog.Root>
     </Container>
   );
 }

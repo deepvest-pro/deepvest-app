@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useTransition } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Box,
   Container,
@@ -16,12 +16,23 @@ import {
   Button,
   AspectRatio,
   Badge,
+  AlertDialog,
+  Separator,
 } from '@radix-ui/themes';
-import { CalendarIcon, ArrowLeftIcon, EyeOpenIcon, EyeClosedIcon } from '@radix-ui/react-icons';
+import {
+  CalendarIcon,
+  ArrowLeftIcon,
+  EyeOpenIcon,
+  EyeClosedIcon,
+  TrashIcon,
+} from '@radix-ui/react-icons';
 import { ProjectWithSnapshot, ProjectPermission, TeamMember } from '@/types/supabase';
 import { formatDate } from '@/lib/utils/format';
 import { useToastHelpers } from '@/components/layout/ToastProvider';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { deleteProject } from '@/app/projects/[id]/actions';
+import { useProjectPermissions } from '@/lib/hooks/useProjectData';
+import { getCurrentUser } from '@/lib/supabase/client';
 
 // Import section components
 import {
@@ -45,7 +56,8 @@ interface EditProjectContentProps {
 
 export function EditProjectContent({ project }: EditProjectContentProps) {
   const searchParams = useSearchParams();
-  const { success } = useToastHelpers();
+  const router = useRouter();
+  const { success, error } = useToastHelpers();
 
   // Get current section from URL params, default to 'common'
   const currentSection = (searchParams.get('section') as ProjectSection) || 'common';
@@ -55,6 +67,14 @@ export function EditProjectContent({ project }: EditProjectContentProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [teamLoading, setTeamLoading] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // State for delete functionality
+  const [isPending, startTransition] = useTransition();
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
+  // Get user permissions
+  const permissions = useProjectPermissions(project, userId || undefined);
 
   // Get current snapshot data for editing
   const isEditingDraft =
@@ -90,6 +110,20 @@ export function EditProjectContent({ project }: EditProjectContentProps) {
       loadTeamMembers();
     }
   }, [currentSection, project.id, loadTeamMembers]);
+
+  // Load current user
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const user = await getCurrentUser();
+        setUserId(user?.id || null);
+      } catch (error) {
+        console.error('Error loading user:', error);
+      }
+    };
+
+    loadUser();
+  }, []);
 
   // Prepare initial data for sections
   const commonInfoData = {
@@ -295,12 +329,6 @@ export function EditProjectContent({ project }: EditProjectContentProps) {
                 Back to Project
               </Button>
             </Link>
-            <Link href={`/projects/${project.id}`} passHref>
-              <Button variant="soft" color="blue" size="2">
-                <EyeOpenIcon />
-                Preview
-              </Button>
-            </Link>
           </Flex>
         </Box>
       </Box>
@@ -433,6 +461,24 @@ export function EditProjectContent({ project }: EditProjectContentProps) {
                     />
                   </Box>
                 </Box>
+
+                {/* Delete Project Section */}
+                {permissions.isOwner && (
+                  <>
+                    <Separator my="2" />
+                    <Button
+                      variant="soft"
+                      color="red"
+                      size="2"
+                      style={{ width: '100%' }}
+                      onClick={() => setShowDeleteDialog(true)}
+                      disabled={isPending}
+                    >
+                      <TrashIcon />
+                      Delete Project
+                    </Button>
+                  </>
+                )}
               </Flex>
             </Card>
           </Flex>
@@ -444,6 +490,55 @@ export function EditProjectContent({ project }: EditProjectContentProps) {
           {renderCurrentSection()}
         </Box>
       </Grid>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog.Root open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialog.Content style={{ maxWidth: 450 }}>
+          <AlertDialog.Title>Delete Project</AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            Are you sure you want to delete &ldquo;{projectName}&rdquo;? This action cannot be
+            undone and will permanently remove the project and all its data.
+          </AlertDialog.Description>
+
+          <Flex gap="3" mt="4" justify="end">
+            <AlertDialog.Cancel>
+              <Button variant="soft" color="gray">
+                Cancel
+              </Button>
+            </AlertDialog.Cancel>
+            <AlertDialog.Action>
+              <Button
+                variant="solid"
+                color="red"
+                onClick={() => {
+                  startTransition(async () => {
+                    try {
+                      const result = await deleteProject({
+                        projectId: project.id,
+                      });
+
+                      if (result.success) {
+                        success('Project deleted successfully');
+                        router.push('/projects');
+                      } else {
+                        error(result.error || 'Failed to delete project');
+                        setShowDeleteDialog(false);
+                      }
+                    } catch (deleteError) {
+                      console.error('Delete project error:', deleteError);
+                      error('An unexpected error occurred while deleting project.');
+                      setShowDeleteDialog(false);
+                    }
+                  });
+                }}
+                disabled={isPending}
+              >
+                {isPending ? 'Deleting...' : 'Delete Project'}
+              </Button>
+            </AlertDialog.Action>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
     </Container>
   );
 }
