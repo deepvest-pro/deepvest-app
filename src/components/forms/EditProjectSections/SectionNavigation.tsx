@@ -18,6 +18,7 @@ interface SectionNavigationProps {
   projectId: string;
   completedSections?: Set<ProjectSection>;
   hasUnsavedChanges?: boolean;
+  isVertical?: boolean;
 }
 
 const sections = [
@@ -58,6 +59,7 @@ export function SectionNavigation({
   projectId,
   completedSections = new Set(),
   hasUnsavedChanges = false,
+  isVertical = false,
 }: SectionNavigationProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -72,13 +74,19 @@ export function SectionNavigation({
   };
 
   return (
-    <Box mb="6">
+    <Box mb={isVertical ? '0' : '6'}>
       <Flex direction="column" gap="3">
-        <Text size="3" weight="medium" color="gray">
-          Edit Project Sections
-        </Text>
+        {!isVertical && (
+          <Text size="3" weight="medium" color="gray">
+            Edit Project Sections
+          </Text>
+        )}
 
-        <Flex gap="2" wrap="wrap">
+        <Flex
+          direction={isVertical ? 'column' : 'row'}
+          gap="2"
+          wrap={isVertical ? 'nowrap' : 'wrap'}
+        >
           {sections.map(section => {
             const Icon = section.icon;
             const isActive = section.id === currentSection;
@@ -90,17 +98,23 @@ export function SectionNavigation({
                 onClick={() => handleSectionChange(section.id)}
                 style={{
                   cursor: 'pointer',
-                  padding: '12px 16px',
+                  padding: isVertical ? '10px 12px' : '12px 16px',
                   borderRadius: 'var(--radius-3)',
                   border: `1px solid ${isActive ? 'var(--blue-7)' : 'var(--gray-6)'}`,
                   backgroundColor: isActive ? 'var(--blue-2)' : 'var(--gray-1)',
                   transition: 'all 0.2s ease',
-                  minWidth: '140px',
+                  minWidth: isVertical ? 'auto' : '140px',
+                  width: isVertical ? '100%' : 'auto',
                 }}
                 className={`section-nav-item ${isActive ? 'active' : ''}`}
               >
-                <Flex direction="column" gap="2" align="center">
-                  <Flex align="center" gap="2">
+                <Flex
+                  direction={isVertical ? 'row' : 'column'}
+                  gap="2"
+                  align={isVertical ? 'center' : 'center'}
+                  justify={isVertical ? 'start' : 'center'}
+                >
+                  <Flex align="center" gap="2" style={{ width: isVertical ? '100%' : 'auto' }}>
                     <Icon
                       width="16"
                       height="16"
@@ -114,15 +128,17 @@ export function SectionNavigation({
                       {section.title}
                     </Text>
                     {isCompleted && (
-                      <Badge size="1" color="green">
+                      <Badge size="1" color="green" style={{ marginLeft: 'auto' }}>
                         ✓
                       </Badge>
                     )}
                   </Flex>
 
-                  <Text size="1" color="gray" style={{ textAlign: 'center' }}>
-                    {section.description}
-                  </Text>
+                  {!isVertical && (
+                    <Text size="1" color="gray" style={{ textAlign: 'center' }}>
+                      {section.description}
+                    </Text>
+                  )}
                 </Flex>
               </Box>
             );

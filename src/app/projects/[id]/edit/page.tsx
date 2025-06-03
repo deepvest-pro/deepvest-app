@@ -1,8 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/client';
 import { checkUserProjectRole, getProjectWithDetails } from '@/lib/supabase/helpers';
-import { Heading, Container, Text, Box } from '@radix-ui/themes';
-import EditProjectForm from './EditProjectForm';
+import { EditProjectContent } from '@/components/projects/EditProjectContent';
 
 interface EditProjectPageProps {
   params: Promise<{
@@ -44,21 +43,18 @@ export default async function EditProjectPage({ params }: EditProjectPageProps) 
     .eq('id', user.id)
     .single();
 
+  // Get user role for the project
+  const userPermission = project.permissions?.find(
+    (permission: { user_id: string; role: string }) => permission.user_id === user.id,
+  );
+  const userRole = userPermission?.role || 'viewer';
+
   return (
-    <Container size="2" py="6">
-      <Box mb="6">
-        <Heading size="6" mb="2">
-          Edit Project
-        </Heading>
-        <Text size="2" color="gray">
-          Make changes to your project. A new draft will be created until you publish your changes.
-        </Text>
-      </Box>
-      <EditProjectForm
-        project={project}
-        userFullName={userProfile?.full_name || ''}
-        userEmail={user.email || ''}
-      />
-    </Container>
+    <EditProjectContent
+      project={project}
+      userFullName={userProfile?.full_name || ''}
+      userEmail={user.email || ''}
+      userRole={userRole}
+    />
   );
 }
