@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import Link from 'next/link';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Box, Container, Flex, Text, Heading, Button, Card, Grid } from '@radix-ui/themes';
 import { useUpdateProfile } from '@/lib/auth/auth-hooks';
+import { useToastHelpers } from '@/components/layout/ToastProvider';
 import { profileUpdateSchema, type ProfileUpdateData } from '@/lib/validations/auth';
 import type { UserProfile } from '@/types/auth';
 
@@ -14,8 +14,8 @@ interface ProfileEditFormProps {
 }
 
 export function ProfileEditForm({ initialData }: ProfileEditFormProps) {
-  const { updateProfile, isLoading, error } = useUpdateProfile();
-  const [success, setSuccess] = useState(false);
+  const { updateProfile, isLoading } = useUpdateProfile();
+  const { success, error: toastError } = useToastHelpers();
 
   const getStringValue = (value: unknown): string => {
     return typeof value === 'string' ? value : '';
@@ -51,7 +51,9 @@ export function ProfileEditForm({ initialData }: ProfileEditFormProps) {
   const onSubmit = handleSubmit(async data => {
     const result = await updateProfile(data);
     if (result.success) {
-      setSuccess(true);
+      success('Your profile has been updated successfully', 'Profile Updated');
+    } else if (result.error) {
+      toastError(result.error, 'Profile Update Failed');
     }
   });
 
@@ -64,32 +66,6 @@ export function ProfileEditForm({ initialData }: ProfileEditFormProps) {
 
         <form onSubmit={onSubmit}>
           <Flex direction="column" gap="6">
-            {error && (
-              <Box
-                p="3"
-                style={{
-                  backgroundColor: 'var(--red-3)',
-                  color: 'var(--red-11)',
-                  borderRadius: '6px',
-                }}
-              >
-                <Text size="2">{error}</Text>
-              </Box>
-            )}
-
-            {success && (
-              <Box
-                p="3"
-                style={{
-                  backgroundColor: 'var(--green-3)',
-                  color: 'var(--green-11)',
-                  borderRadius: '6px',
-                }}
-              >
-                <Text size="2">Profile updated successfully!</Text>
-              </Box>
-            )}
-
             <Card>
               <Heading size="4" mb="4">
                 Personal Information
