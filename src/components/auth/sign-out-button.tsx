@@ -1,8 +1,7 @@
 'use client';
 
-import { useState } from 'react';
 import { Button } from '@radix-ui/themes';
-import { signOut } from '@/lib/supabase/auth-actions';
+import { useSignOut } from '@/lib/auth/auth-hooks';
 
 interface SignOutButtonProps {
   className?: string;
@@ -10,18 +9,10 @@ interface SignOutButtonProps {
 }
 
 export function SignOutButton({ className = '', variant = 'solid' }: SignOutButtonProps) {
-  const [isLoading, setIsLoading] = useState(false);
+  const { signOut, isLoading } = useSignOut();
 
   const handleSignOut = async () => {
-    setIsLoading(true);
-    try {
-      await signOut();
-      // No need to handle redirect as signOut function already redirects
-    } catch (error) {
-      console.error('Sign out error:', error);
-    } finally {
-      setIsLoading(false);
-    }
+    await signOut();
   };
 
   return (

@@ -6,11 +6,10 @@ import Link from 'next/link';
 import { Box, Container, Flex, Text, Heading, Button } from '@radix-ui/themes';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { resetPasswordSchema, type ResetPasswordRequest } from '@/lib/validations/auth';
-import { resetPassword } from '@/lib/supabase/auth-actions';
+import { useResetPassword } from '@/lib/auth/auth-hooks';
 
 export function ResetPasswordForm() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { resetPassword, isLoading, error } = useResetPassword();
   const [success, setSuccess] = useState(false);
 
   const {
@@ -25,22 +24,10 @@ export function ResetPasswordForm() {
   });
 
   const onSubmit = async (data: ResetPasswordRequest) => {
-    setIsLoading(true);
-    setError(null);
+    const result = await resetPassword(data);
 
-    try {
-      const result = await resetPassword(data);
-
-      if (result.error) {
-        setError(result.error);
-      } else {
-        setSuccess(true);
-      }
-    } catch (err) {
-      setError('An unexpected error occurred. Please try again.');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
+    if (result.success) {
+      setSuccess(true);
     }
   };
 

@@ -3,17 +3,15 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Box, Container, Flex, Text, Heading, Button } from '@radix-ui/themes';
 import { signInSchema, type SignInCredentials } from '@/lib/validations/auth';
-import { signIn } from '@/lib/supabase/auth-actions';
+import { useSignIn } from '@/lib/auth/auth-hooks';
 import { OAuthButtons } from './oauth-buttons';
 
 export function SignInForm() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
+  const { signIn, isLoading, error } = useSignIn();
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   const {
     register,
@@ -28,23 +26,10 @@ export function SignInForm() {
   });
 
   const onSubmit = async (data: SignInCredentials) => {
-    setIsLoading(true);
-    setError(null);
+    const result = await signIn(data);
 
-    try {
-      const result = await signIn(data);
-
-      if (result.error) {
-        setError(result.error);
-      } else {
-        router.push('/');
-        router.refresh();
-      }
-    } catch (err) {
-      setError('An unexpected error occurred. Please try again.');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
+    if (result.success) {
+      setShowSuccessMessage(true);
     }
   };
 
@@ -88,6 +73,19 @@ export function SignInForm() {
                 }}
               >
                 <Text size="2">{error}</Text>
+              </Box>
+            )}
+
+            {showSuccessMessage && (
+              <Box
+                p="3"
+                style={{
+                  backgroundColor: 'var(--green-3)',
+                  color: 'var(--green-11)',
+                  borderRadius: '6px',
+                }}
+              >
+                <Text size="2">Successfully signed in!</Text>
               </Box>
             )}
 

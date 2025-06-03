@@ -3,6 +3,9 @@ import { updateSession } from '@/lib/supabase/middleware';
 
 /**
  * Middleware function to handle auth session updates and protected routes
+ *
+ * Use updated approach to authentication with Supabase
+ * All access to Supabase is done on the server side
  */
 export async function middleware(request: NextRequest) {
   // Update Supabase auth session

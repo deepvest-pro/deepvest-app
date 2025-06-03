@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getUserData } from '@/lib/react-query/auth-queries';
+import { getUserData } from '@/lib/react-query/auth-actions';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;

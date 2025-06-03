@@ -6,11 +6,10 @@ import Link from 'next/link';
 import { Box, Container, Flex, Text, Heading, Button } from '@radix-ui/themes';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { signUpSchema, type SignUpCredentials } from '@/lib/validations/auth';
-import { signUp } from '@/lib/supabase/auth-actions';
+import { useSignUp } from '@/lib/auth/auth-hooks';
 
 export function SignUpForm() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { signUp, isLoading, error } = useSignUp();
   const [success, setSuccess] = useState(false);
 
   const {
@@ -28,22 +27,10 @@ export function SignUpForm() {
   });
 
   const onSubmit = async (data: SignUpCredentials) => {
-    setIsLoading(true);
-    setError(null);
+    const result = await signUp(data);
 
-    try {
-      const result = await signUp(data);
-
-      if (result.error) {
-        setError(result.error);
-      } else {
-        setSuccess(true);
-      }
-    } catch (err) {
-      setError('An unexpected error occurred. Please try again.');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
+    if (result.success) {
+      setSuccess(true);
     }
   };
 

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { getUserData } from '@/lib/react-query/auth-queries';
+import { getUserData } from '@/lib/react-query/auth-actions';
 import { SignInForm } from '@/components/auth/sign-in-form';
 
 export const metadata: Metadata = {
@@ -9,7 +9,6 @@ export const metadata: Metadata = {
 };
 
 export default async function SignInPage() {
-  // Redirect if user is already logged in
   const userData = await getUserData();
 
   if (userData) {

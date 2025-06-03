@@ -1,19 +1,11 @@
-'use client';
+import type { Metadata } from 'next';
+import { AuthError } from '@/components/auth/auth-error';
 
-import Link from 'next/link';
+export const metadata: Metadata = {
+  title: 'Authentication Error - DeepVest',
+  description: 'Authentication error occurred',
+};
 
 export default function AuthErrorPage() {
-  return (
-    <article>
-      <h1>Authentication Error</h1>
-      <p>
-        Sorry, there was a problem with your authentication request. This could be due to an expired
-        link or invalid token.
-      </p>
-      <div>
-        <Link href="/auth/sign-in">Sign In</Link>
-        <Link href="/">Go Home</Link>
-      </div>
-    </article>
-  );
+  return <AuthError />;
 }

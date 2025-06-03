@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { getUserData } from '@/lib/react-query/auth-queries';
+import { getUserData } from '@/lib/react-query/auth-actions';
 import { AuthStatus } from '@/components/auth/auth-status';
 import { HomePageContent } from '@/components/home/home-page-content';
 

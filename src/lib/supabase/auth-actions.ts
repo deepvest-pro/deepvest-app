@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { createServerSupabaseClient } from './server';
+import { createServerSupabaseClient } from './client';
 import {
   SignInCredentials,
   SignUpCredentials,

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
+import { getUserData } from '@/lib/react-query/auth-actions';
 import { ProtectedRoute } from '@/components/auth/protected-route';
-import { getUserData } from '@/lib/react-query/auth-queries';
 import { AccountContent } from './account-content';
 
 export const metadata: Metadata = {

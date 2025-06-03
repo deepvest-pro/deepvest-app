@@ -8,6 +8,7 @@ import { SignOutButton } from '@/components/auth/sign-out-button';
 interface NavBarContentProps {
   userData: UserData | null;
   isAuthenticated: boolean;
+  isLoading?: boolean;
 }
 
 export function NavBarContent({ userData, isAuthenticated }: NavBarContentProps) {

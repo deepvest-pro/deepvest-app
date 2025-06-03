@@ -1,10 +1,22 @@
-import type { UserData } from '@/types/auth';
-import { getUserData } from '@/lib/react-query/auth-queries';
-import { NavBarContent } from '@/components/layout/nav-bar-content';
+import { NavBarClient } from '@/components/layout/nav-bar-client';
+import { getUserData } from '@/lib/react-query/auth-actions';
+import { cookies } from 'next/headers';
 
+/**
+ * Server component wrapper for NavBar
+ * Provides initial data from the server and passes it to the client component
+ * to prevent flickering when loading
+ */
 export async function NavBar() {
-  const userData = await getUserData();
-  const isAuthenticated = !!userData;
+  await cookies();
 
-  return <NavBarContent userData={userData as UserData | null} isAuthenticated={isAuthenticated} />;
+  const initialUserData = await getUserData();
+  const initialIsAuthenticated = !!initialUserData;
+
+  return (
+    <NavBarClient
+      initialUserData={initialUserData}
+      initialIsAuthenticated={initialIsAuthenticated}
+    />
+  );
 }

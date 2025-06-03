@@ -1,4 +1,4 @@
-import { getUserData } from '@/lib/react-query/auth-queries';
+import { getUserData } from '@/lib/react-query/auth-actions';
 import type { UserData } from '@/types/auth';
 import { AuthStatusContent } from '@/components/auth/auth-status-content';
 
