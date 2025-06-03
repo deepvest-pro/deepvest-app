@@ -149,7 +149,7 @@ export async function updateProfile(data: ProfileUpdateData) {
   }
 
   revalidatePath(`/users/${user.id}`);
-  revalidatePath('/account');
+  revalidatePath('/profile');
 
   return { success: true };
 }

@@ -41,7 +41,7 @@ export function useSignIn() {
 
       router.refresh();
 
-      router.push('/account');
+      router.push('/profile');
 
       return { success: true };
     } catch (err) {
@@ -220,7 +220,7 @@ export function useUpdateProfile() {
 
       router.refresh();
 
-      router.push('/account');
+      router.push('/profile');
 
       return { success: true };
     } catch (err) {

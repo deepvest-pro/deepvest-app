@@ -5,7 +5,7 @@ import { SignInForm } from '@/components/auth/sign-in-form';
 
 export const metadata: Metadata = {
   title: 'Sign In - DeepVest',
-  description: 'Sign in to your DeepVest account',
+  description: 'Sign in to your DeepVest profile',
 };
 
 export default async function SignInPage() {

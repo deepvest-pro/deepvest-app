@@ -10,7 +10,38 @@ import type { UserData, UserProfile } from '@/types/auth';
  * Uses private environment variables (without the NEXT_PUBLIC_ prefix)
  */
 export async function createServerSupabaseClient() {
-  const cookieStore = await cookies();
+  let cookieStore;
+
+  try {
+    cookieStore = await cookies();
+  } catch {
+    console.warn('Unable to access cookie store, using memory storage instead');
+    // Fallback for contexts where cookies() are not available
+    const memoryStore = new Map<string, string>();
+
+    // Return client with memory storage
+    return createClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+      {
+        auth: {
+          persistSession: false, // Don't try to save session, we don't have access to cookies
+          flowType: 'pkce',
+          autoRefreshToken: false,
+          detectSessionInUrl: true,
+          storage: {
+            getItem: key => memoryStore.get(key) || null,
+            setItem: (key, value) => {
+              memoryStore.set(key, value);
+            },
+            removeItem: key => {
+              memoryStore.delete(key);
+            },
+          },
+        },
+      },
+    );
+  }
 
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const supabaseKey =
@@ -29,21 +60,95 @@ export async function createServerSupabaseClient() {
       detectSessionInUrl: true,
       storage: {
         getItem: (key: string) => {
-          const cookie = cookieStore.get(key);
-          return cookie?.value ?? null;
+          try {
+            const cookie = cookieStore.get(key);
+
+            // Verify token integrity if it's an access token
+            if ((key === 'sb-access-token' || key === 'sb-refresh-token') && cookie?.value) {
+              const token = cookie.value;
+
+              // Basic JWT validation
+              const parts = token.split('.');
+              if (parts.length !== 3) {
+                console.error(`Invalid token format for ${key}`);
+                return null;
+              }
+
+              try {
+                // Check expiration
+                const payload = JSON.parse(atob(parts[1]));
+                const now = Math.floor(Date.now() / 1000);
+
+                // If token is expired, don't return it
+                if (typeof payload.exp === 'number' && payload.exp <= now) {
+                  console.error(`Expired token found for ${key}`);
+                  return null;
+                }
+
+                // If expiration time is unreasonably far in the future, don't accept it
+                if (typeof payload.exp === 'number' && payload.exp > now + 1209600) {
+                  // 2 weeks
+                  console.error(`Suspicious token expiration for ${key}`);
+                  return null;
+                }
+              } catch (e) {
+                console.error(`Error parsing token for ${key}:`, e);
+                return null;
+              }
+            }
+
+            return cookie?.value ?? null;
+          } catch (error) {
+            console.error(`Error getting cookie ${key}:`, error);
+            return null;
+          }
         },
         setItem: (key: string, value: string) => {
           try {
-            cookieStore.set(key, value);
-          } catch {
-            // Ignore errors when setting cookies from a server component
+            cookieStore.set(key, value, {
+              path: '/',
+              httpOnly: true,
+              sameSite: 'lax',
+              secure: process.env.NODE_ENV === 'production',
+              maxAge: 60 * 60 * 24 * 7, // 7 days
+            });
+          } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            if (
+              err.message.includes(
+                'Cookies can only be modified in a Server Action or Route Handler',
+              )
+            ) {
+              console.debug(
+                `Cookie set operation for "${key}" skipped in current Next.js context: ${err.message}`,
+              );
+            } else {
+              console.warn(`Unable to set cookie ${key}: ${err.message}`);
+            }
           }
         },
         removeItem: (key: string) => {
           try {
-            cookieStore.set(key, '', { maxAge: 0 });
-          } catch {
-            // Ignore errors when deleting cookies from a server component
+            cookieStore.set(key, '', {
+              path: '/',
+              maxAge: 0,
+              httpOnly: true,
+              sameSite: 'lax',
+              secure: process.env.NODE_ENV === 'production',
+            });
+          } catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            if (
+              err.message.includes(
+                'Cookies can only be modified in a Server Action or Route Handler',
+              )
+            ) {
+              console.debug(
+                `Cookie remove operation for "${key}" skipped in current Next.js context: ${err.message}`,
+              );
+            } else {
+              console.warn(`Unable to remove cookie ${key}: ${err.message}`);
+            }
           }
         },
       },

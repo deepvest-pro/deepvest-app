@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { getUserData } from '@/lib/react-query/auth-queries';
+import { getUserData } from '@/lib/react-query/auth-actions';
 import { ResetPasswordForm } from '@/components/auth/reset-password-form';
 
 export const metadata: Metadata = {
   title: 'Reset Password - DeepVest',
-  description: 'Reset your DeepVest account password',
+  description: 'Reset your DeepVest profile password',
 };
 
 export default async function ResetPasswordPage() {

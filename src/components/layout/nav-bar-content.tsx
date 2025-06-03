@@ -48,7 +48,7 @@ export function NavBarContent({ userData, isAuthenticated }: NavBarContentProps)
 
           {isAuthenticated ? (
             <Flex gap="4" align="center">
-              <Link href="/account">
+              <Link href="/profile">
                 <span className="inline-block">
                   <Flex gap="2" align="center">
                     {userData?.profile?.avatar_url ? (
@@ -69,7 +69,7 @@ export function NavBarContent({ userData, isAuthenticated }: NavBarContentProps)
                         }
                       />
                     )}
-                    <Text>{userData?.profile?.nickname || 'Account'}</Text>
+                    <Text>{userData?.profile?.nickname || 'Profile'}</Text>
                   </Flex>
                 </span>
               </Link>

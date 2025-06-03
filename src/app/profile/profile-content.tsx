@@ -15,11 +15,11 @@ import {
 } from '@radix-ui/themes';
 import { UserData } from '@/types/auth';
 
-interface AccountContentProps {
+interface ProfileContentProps {
   userData: UserData | null;
 }
 
-export function AccountContent({ userData }: AccountContentProps) {
+export function ProfileContent({ userData }: ProfileContentProps) {
   if (!userData) {
     return null; // This shouldn't happen due to ProtectedRoute, but TypeScript needs it
   }
@@ -30,7 +30,7 @@ export function AccountContent({ userData }: AccountContentProps) {
     <Container size="2" py="6">
       <Flex direction="column" gap="6">
         <Heading size="8" mb="2">
-          Your Account
+          Your Profile
         </Heading>
 
         <Card>
@@ -66,7 +66,7 @@ export function AccountContent({ userData }: AccountContentProps) {
         <Grid columns={{ initial: '1', md: '2' }} gap="6">
           <Card>
             <Heading size="4" mb="4">
-              Account Information
+              Profile Information
             </Heading>
             <Flex direction="column" gap="3">
               <Flex justify="between">
@@ -75,7 +75,7 @@ export function AccountContent({ userData }: AccountContentProps) {
               </Flex>
               <Separator size="4" />
               <Flex justify="between">
-                <Text weight="medium">Account Created</Text>
+                <Text weight="medium">Profile Created</Text>
                 <Text>
                   {new Date(user.created_at).toLocaleDateString('en-US', {
                     year: 'numeric',
@@ -122,7 +122,7 @@ export function AccountContent({ userData }: AccountContentProps) {
         </Grid>
 
         <Flex justify="center" mt="4">
-          <Link href="/account/edit">
+          <Link href="/profile/edit">
             <Button size="3" color="blue">
               Edit Profile
             </Button>

@@ -48,7 +48,7 @@ export function HomePageContent({ isAuthenticated, authStatusContent }: HomePage
                 </Button>
               </span>
             </Link>
-            <Link href="/account">
+            <Link href="/profile">
               <span>
                 <Button size="3" variant="outline">
                   View Profile

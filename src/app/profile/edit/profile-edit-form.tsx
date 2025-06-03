@@ -433,7 +433,7 @@ export function ProfileEditForm({ initialData }: ProfileEditFormProps) {
             </Card>
 
             <Flex gap="4" justify="end">
-              <Link href="/account">
+              <Link href="/profile">
                 <Button size="3" variant="soft" disabled={isLoading}>
                   Cancel
                 </Button>
