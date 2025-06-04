@@ -6,25 +6,29 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
  * Factory class for creating and managing Supabase clients
- * Provides centralized client creation with caching and error handling
+ * Provides centralized client creation with proper request isolation
+ *
+ * SECURITY NOTE: Server clients are NOT cached to prevent user session leakage
+ * between different requests in SSR environments.
  */
 export class SupabaseClientFactory {
-  private static serverClient: Promise<SupabaseClient<Database>> | null = null;
+  // Only cache clients that don't depend on user-specific data
   private static serviceRoleClient: SupabaseClient<Database> | null = null;
   private static browserClient: SupabaseClient<Database> | null = null;
 
   /**
-   * Get or create a server-side Supabase client
-   * Uses caching to avoid recreating clients unnecessarily
+   * Create a new server-side Supabase client for each request
    *
-   * @returns Promise<SupabaseClient<Database>> - Configured Supabase client
+   * SECURITY: This method creates a fresh client for each request to ensure
+   * proper cookie isolation between different users in SSR environments.
+   * Caching server clients would cause user session leakage.
+   *
+   * @returns Promise<SupabaseClient<Database>> - New Supabase client instance
    * @throws {Error} When environment variables are missing
    */
   static async getServerClient(): Promise<SupabaseClient<Database>> {
-    if (!this.serverClient) {
-      this.serverClient = this.createServerClient();
-    }
-    return this.serverClient;
+    // Always create a new client to ensure proper request isolation
+    return this.createServerClient();
   }
 
   /**
@@ -164,11 +168,13 @@ export class SupabaseClientFactory {
   }
 
   /**
-   * Clear the cached client instance
+   * Clear the cached client instances
    * Useful for testing or when client configuration changes
+   *
+   * NOTE: Server clients are not cached for security reasons
    */
   static clearCache(): void {
-    this.serverClient = null;
+    // Server clients are not cached, so nothing to clear
     this.serviceRoleClient = null;
     this.browserClient = null;
   }
