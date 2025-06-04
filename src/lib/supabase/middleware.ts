@@ -37,59 +37,72 @@ export async function updateSession(request: NextRequest) {
   try {
     // Note: Using getSession() in middleware is acceptable as it runs at the edge
     // and doesn't have the same security concerns as server components
-    const { error: sessionError } = await supabase.auth.getSession();
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
 
     if (sessionError) {
       console.warn('[updateSession] Error getting session:', sessionError.message);
       if (
         sessionError.message?.includes('Invalid Refresh Token') ||
-        sessionError.message?.includes('refresh_token_already_used')
+        sessionError.message?.includes('refresh_token_already_used') ||
+        sessionError.message?.includes('AuthSessionMissingError')
       ) {
         console.warn(
-          '[updateSession] Invalid refresh token detected. Clearing auth cookies and redirecting to sign-in.',
+          '[updateSession] Invalid session detected. Clearing auth cookies and redirecting to sign-in.',
         );
         const redirectResponse = NextResponse.redirect(new URL('/auth/sign-in', request.url));
-        clearAuthCookies(redirectResponse); // clearAuthCookies now needs to operate on NextResponse directly
+        clearAuthCookies(redirectResponse);
         return redirectResponse;
       }
     }
+
+    // If we have a valid session, refresh it
+    if (sessionData?.session) {
+      await supabase.auth.refreshSession();
+    }
   } catch (error) {
     console.error('[updateSession] Unexpected error:', error);
+    // Don't redirect on general errors, just continue
   }
 
   return response;
 }
 
 function clearAuthCookies(response: NextResponse) {
+  // Extract project ref from Supabase URL
+  const projectRef = process.env.NEXT_PUBLIC_SUPABASE_URL?.split('.')[0].split('//')[1];
+
   const authCookieKeys = [
-    // Construct the project-specific auth token cookie name
-    `sb-${process.env.NEXT_PUBLIC_SUPABASE_PROJECT_ID}-auth-token`,
-    // Add any other generic or older cookie names if necessary
+    // Modern Supabase auth cookie format
+    ...(projectRef ? [`sb-${projectRef}-auth-token`] : []),
+    // Legacy cookie names for backwards compatibility
     'sb-access-token',
     'sb-refresh-token',
+    // Additional possible cookie names
+    'supabase-auth-token',
+    'supabase.auth.token',
   ];
 
-  const projectRef = process.env.NEXT_PUBLIC_SUPABASE_URL?.split('.')[0].split('//')[1];
-  if (projectRef && projectRef !== process.env.NEXT_PUBLIC_SUPABASE_PROJECT_ID) {
-    authCookieKeys.push(`sb-${projectRef}-auth-token`);
+  // Add project ID-based cookie if available
+  if (process.env.NEXT_PUBLIC_SUPABASE_PROJECT_ID) {
+    authCookieKeys.push(`sb-${process.env.NEXT_PUBLIC_SUPABASE_PROJECT_ID}-auth-token`);
   }
 
   authCookieKeys.forEach(cookieName => {
-    if (cookieName.includes('undefined')) {
-      // Avoid setting cookies with "sb-undefined-auth-token"
+    if (cookieName.includes('undefined') || !cookieName) {
       console.warn(
         `[clearAuthCookies] Attempted to clear undefined cookie name: ${cookieName}. Skipping.`,
       );
       return;
     }
+
+    // Clear cookie with comprehensive attributes
     response.cookies.delete({
       name: cookieName,
       path: '/',
-      // Ensure all relevant cookie attributes are set for deletion if they were set during creation
-      // domain: process.env.NODE_ENV === 'production' ? process.env.DOMAIN || undefined : undefined,
-      // secure: process.env.NODE_ENV === 'production',
-      // httpOnly: true,
-      // sameSite: 'lax',
+      domain: process.env.NODE_ENV === 'production' ? undefined : undefined,
+      secure: process.env.NODE_ENV === 'production',
+      httpOnly: false, // Supabase auth cookies are typically not httpOnly
+      sameSite: 'lax',
     });
   });
 }

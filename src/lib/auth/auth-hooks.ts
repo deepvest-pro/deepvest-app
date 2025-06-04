@@ -39,9 +39,14 @@ export function useSignIn() {
 
       invalidateAuth();
 
-      router.refresh();
-
-      router.push('/profile');
+      // Force refresh and redirect using window.location for more reliable redirect
+      if (typeof window !== 'undefined') {
+        window.location.href = '/';
+      } else {
+        // Fallback for server-side
+        router.refresh();
+        router.push('/');
+      }
 
       return { success: true };
     } catch (err) {

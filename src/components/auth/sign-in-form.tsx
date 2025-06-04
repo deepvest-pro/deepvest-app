@@ -30,6 +30,8 @@ export function SignInForm() {
 
     if (result.success) {
       toast('Successfully signed in!', 'success', 'Welcome back');
+    } else if (result.error) {
+      toast(result.error, 'error', 'Sign in failed');
     } else if (error) {
       toast(error, 'error', 'Sign in failed');
     }
