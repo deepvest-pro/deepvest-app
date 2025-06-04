@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { getUserData } from '@/lib/react-query/auth-actions';
-import { SignUpForm } from '@/components/auth/sign-up-form';
+import { SignUpForm } from '@/components/auth';
 
 export const metadata: Metadata = {
   title: 'Sign Up - DeepVest',

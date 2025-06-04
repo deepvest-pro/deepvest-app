@@ -4,13 +4,14 @@ import React from 'react';
 import { Theme } from '@radix-ui/themes';
 import type { ThemeProps } from '@radix-ui/themes';
 
-// Theme configuration
+// Theme configuration with green accent inspired by Flow
 export const themeConfig: ThemeProps = {
-  accentColor: 'blue',
+  accentColor: 'green',
   grayColor: 'slate',
   radius: 'medium',
   scaling: '100%',
   panelBackground: 'solid',
+  appearance: 'light', // Force light theme
 };
 
 // Theme provider component

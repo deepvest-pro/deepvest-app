@@ -211,7 +211,40 @@ import { StyledInput, FormField } from '@/components/forms';
 - Если больше - разбить на sub-компоненты
 - Выносить сложную логику в custom hooks
 
-#### 2. Props interface
+#### 2. Структура компонента и стилей (ОБЯЗАТЕЛЬНО)
+
+```
+components/
+├── ui/
+│   ├── Button/
+│   │   ├── Button.tsx
+│   │   ├── Button.module.scss
+│   └── Card/
+│       ├── Card.tsx
+│       ├── Card.module.scss
+```
+
+#### ЗАПРЕЩЕНО использовать inline стили в JSX
+
+```typescript
+// ❌ НЕПРАВИЛЬНО
+<div style={{
+  padding: '16px',
+  backgroundColor: 'var(--flow-green)',
+  borderRadius: '8px'
+}}>
+  Content
+</div>
+
+// ✅ ПРАВИЛЬНО
+import styles from './Card.module.scss';
+
+<div className={styles.card}>
+  Content
+</div>
+```
+
+#### 3. Props interface
 
 ```typescript
 // ✅ ПРАВИЛЬНО - всегда определять интерфейс
@@ -227,7 +260,7 @@ export function UserCard({ user, onEdit, className, variant = 'detailed' }: User
 }
 ```
 
-#### 3. Default exports vs Named exports
+#### 4. Default exports vs Named exports
 
 - **Default exports**: Только для page компонентов
 - **Named exports**: Все остальные компоненты
@@ -239,6 +272,33 @@ export default function ProjectPage() {}
 // ✅ Обычные компоненты
 export function UserCard() {}
 export function ProjectForm() {}
+```
+
+#### 5. Структура файлов компонента
+
+```typescript
+// components/ui/Button/Button.tsx
+import React from 'react';
+import styles from './Button.module.scss';
+
+interface ButtonProps {
+  variant?: 'primary' | 'secondary';
+  size?: 'sm' | 'md' | 'lg';
+  children: React.ReactNode;
+  className?: string;
+}
+
+export function Button({ variant = 'primary', size = 'md', children, className }: ButtonProps) {
+  return (
+    <button className={`${styles.button} ${styles[variant]} ${styles[size]} ${className || ''}`}>
+      {children}
+    </button>
+  );
+}
+
+// components/ui/Button/Button.tsx
+export { Button } from './Button/Button';
+export type { ButtonProps } from './Button/Button';
 ```
 
 ---

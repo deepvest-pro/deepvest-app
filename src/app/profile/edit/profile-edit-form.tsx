@@ -30,9 +30,8 @@ import { APIClient } from '@/lib/utils/api';
 import { MAX_AVATAR_SIZE_BYTES, MAX_COVER_SIZE_BYTES } from '@/lib/file-constants';
 import { useFormHandler } from '@/hooks/useFormHandler';
 import type { Profile } from '@/types/auth';
-import { StyledInput, StyledTextArea } from '@/components/forms';
-import { FileUploadArea } from '@/components/forms/file-upload-area';
-import { useToastHelpers } from '@/components/layout/ToastProvider';
+import { FileUploadArea, StyledInput, StyledTextArea } from '@/components/forms';
+import { useToastHelpers } from '@/providers/ToastProvider';
 
 interface ProfileEditFormProps {
   initialData: Profile | null;

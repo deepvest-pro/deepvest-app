@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { getLeaderboardProjects } from '@/lib/supabase/helpers';
-import { LeaderboardDisplay } from '@/components/leaderboard/LeaderboardDisplay';
+import { LeaderboardDisplay } from '@/components/leaderboard';
 
 export const dynamic = 'force-dynamic';
 

@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getUserWithProfile } from '@/lib/supabase/client';
-import { ProtectedRoute } from '@/components/auth/protected-route';
+import { ProtectedRoute } from '@/components/auth';
 import { ProfileEditForm } from './profile-edit-form';
 
 export const dynamic = 'force-dynamic';

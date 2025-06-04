@@ -2,12 +2,45 @@
 @import '@radix-ui/themes/styles.css';
 /* Import highlight.js styles for code syntax highlighting */
 @import 'highlight.js/styles/github-dark.css';
+/* Import Flow-inspired theme styles */
+@import '../flow-theme.css';
 
 /* Base styles */
 :root {
   --font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI (Custom)', Roboto, 'Helvetica Neue',
     'Open Sans (Custom)', system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+
+  /* Flow-inspired custom colors */
+  --flow-green: #00a86b;
+  --flow-green-dark: #008b5b;
+  --flow-green-light: #00c878;
+  --flow-green-pale: #e8f8f3;
+
+  /* Gradient colors */
+  --gradient-green: #00a86b;
+  --gradient-blue: #4f46e5;
+  --gradient-purple: #8b5cf6;
+  --gradient-cyan: #06b6d4;
+
+  /* Flow gradients */
+  --gradient-hero: linear-gradient(
+    135deg,
+    var(--gradient-green) 0%,
+    var(--gradient-blue) 50%,
+    var(--gradient-purple) 100%
+  );
+  --gradient-card: linear-gradient(
+    135deg,
+    var(--flow-green-pale) 0%,
+    rgba(255, 255, 255, 0.8) 100%
+  );
+  --gradient-accent: linear-gradient(90deg, var(--flow-green) 0%, var(--flow-green-light) 100%);
+
+  /* Text colors */
+  --text-primary: #1f2937;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
 }
 
 * {

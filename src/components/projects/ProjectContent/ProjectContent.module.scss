@@ -1,0 +1,211 @@
+@use '../../../styles/scss/variables' as var;
+@use '../../../styles/scss/mixins' as mix;
+
+.projectContainer {
+  width: 100%;
+}
+
+.heroSection {
+  position: relative;
+  overflow: hidden;
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+}
+
+.heroBackground {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-size: cover;
+  background-position: center;
+  filter: blur(8px) brightness(0.7);
+  transform: scale(1.1);
+}
+
+.heroOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.heroContent {
+  position: relative;
+  z-index: 2;
+  max-width: 800px;
+}
+
+.heroSubtitle {
+  color: rgba(255, 255, 255, 0.9);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 16px;
+  display: block;
+}
+
+.heroTitle {
+  color: white;
+  line-height: 1.1;
+  margin-bottom: 24px;
+  font-size: clamp(2.5rem, 5vw, 4rem);
+}
+
+.heroSlogan {
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.6;
+  font-style: italic;
+  margin-bottom: 24px;
+  display: block;
+}
+
+.heroBadges {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.projectGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+
+  @include mix.breakpoint(md) {
+    grid-template-columns: 1fr 3fr;
+  }
+}
+
+.leftColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rightColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.logoContainer {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.projectLogo {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.projectCard {
+  background: var(--gray-1);
+  border: 1px solid var(--gray-6);
+  border-radius: var(--radius-3);
+  padding: 20px;
+  transition: all 0.3s ease;
+
+  &:hover {
+    box-shadow: 0 8px 25px rgba(0, 168, 107, 0.1);
+    border-color: var(--green-7);
+  }
+}
+
+.projectActions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  .actionButton {
+    width: 100%;
+    transition: all 0.2s ease;
+
+    &:hover {
+      transform: translateY(-1px);
+    }
+  }
+}
+
+.linksCard {
+  .linkButton {
+    width: 100%;
+    transition: all 0.2s ease;
+
+    &:hover {
+      transform: translateY(-1px);
+      background: var(--gray-3);
+    }
+  }
+}
+
+.aboutSection {
+  .aboutTitle {
+    color: var(--text-primary);
+    margin-bottom: 12px;
+  }
+
+  .aboutText {
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+}
+
+.projectBadges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+// Mobile responsive styles
+@include mix.breakpoint(md) {
+  .heroSection {
+    min-height: 350px;
+  }
+
+  .heroTitle {
+    font-size: clamp(1.8rem, 4vw, 2.5rem) !important;
+  }
+
+  .projectGrid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .leftColumn {
+    order: 2;
+  }
+
+  .rightColumn {
+    order: 1;
+  }
+}
+
+@include mix.breakpoint(sm) {
+  .heroSection {
+    min-height: 300px;
+  }
+
+  .heroContent {
+    max-width: 100%;
+  }
+
+  .heroBadges {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .projectLogo {
+    width: 80px;
+    height: 80px;
+  }
+
+  .projectCard {
+    padding: 16px;
+  }
+}

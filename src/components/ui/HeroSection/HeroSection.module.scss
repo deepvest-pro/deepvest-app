@@ -1,0 +1,149 @@
+.heroSection {
+  background: var(--gradient-hero);
+  position: relative;
+  overflow: hidden;
+  min-height: 500px;
+  display: flex;
+  align-items: center;
+}
+
+.decorativeElement1 {
+  position: absolute;
+  top: 20%;
+  right: 10%;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  filter: blur(40px);
+  z-index: 1;
+}
+
+.decorativeElement2 {
+  position: absolute;
+  bottom: 10%;
+  left: 5%;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  filter: blur(30px);
+  z-index: 1;
+}
+
+.content {
+  position: relative;
+  z-index: 2;
+}
+
+.contentInner {
+  max-width: 600px;
+}
+
+.subtitle {
+  color: rgba(255, 255, 255, 0.9);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 16px;
+  display: block;
+}
+
+.title {
+  color: white;
+  line-height: 1.1;
+  margin-bottom: 24px;
+  font-size: clamp(2.5rem, 5vw, 4rem);
+}
+
+.description {
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.6;
+  margin-bottom: 32px;
+  display: block;
+}
+
+.ctaButton {
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: var(--flow-green) !important;
+  border: none !important;
+  font-weight: 600 !important;
+  padding: 16px 32px !important;
+  border-radius: 12px !important;
+  font-size: 16px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12) !important;
+  transition: all 0.3s ease !important;
+  cursor: pointer !important;
+}
+
+.ctaButton:hover {
+  transform: scale(1.05);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16) !important;
+}
+
+.stats {
+  margin-top: 24px;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.statValue {
+  color: white;
+  display: block;
+  line-height: 1.2;
+}
+
+.statLabel {
+  color: rgba(255, 255, 255, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  .heroSection {
+    min-height: 400px;
+  }
+
+  .title {
+    font-size: clamp(1.8rem, 4vw, 2.5rem) !important;
+  }
+
+  .stats {
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+
+  .decorativeElement1 {
+    width: 200px;
+    height: 200px;
+    top: 15%;
+    right: 5%;
+  }
+
+  .decorativeElement2 {
+    width: 150px;
+    height: 150px;
+    bottom: 5%;
+    left: 2%;
+  }
+
+  .ctaButton {
+    padding: 14px 24px !important;
+    font-size: 14px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .contentInner {
+    max-width: 100%;
+  }
+
+  .subtitle {
+    font-size: 0.75rem;
+  }
+
+  .description {
+    font-size: 1rem;
+  }
+}

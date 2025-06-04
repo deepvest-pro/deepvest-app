@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
-import { AuthError } from '@/components/auth/auth-error';
+import { AuthError } from '@/components/auth';
 
 export const metadata: Metadata = {
   title: 'Authentication Error - DeepVest',

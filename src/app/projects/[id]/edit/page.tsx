@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { SupabaseClientFactory } from '@/lib/supabase/client-factory';
 import { checkUserProjectRole, getProjectWithDetails } from '@/lib/supabase/helpers';
-import { EditProjectContent } from '@/components/projects/EditProjectContent';
+import { EditProjectContent } from '@/components/projects';
 
 export const dynamic = 'force-dynamic';
 

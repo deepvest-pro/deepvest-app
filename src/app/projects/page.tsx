@@ -1,6 +1,6 @@
 import { getCurrentUser } from '@/lib/supabase/client';
 import { getAllVisibleProjects } from '@/lib/supabase/helpers';
-import { ProjectsList } from '@/components/projects/ProjectsList';
+import { ProjectsList } from '@/components/projects';
 
 export const dynamic = 'force-dynamic';
 

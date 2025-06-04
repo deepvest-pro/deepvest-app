@@ -231,7 +231,20 @@
   ```
 
 - [ ] **Contract verification**
+
   - [ ] Автоматическая верификация контрактов на Neon block explorer
+
+    ```bash
+    # Верификация через Hardhat
+    npx hardhat verify --network neondevnet CONTRACT_ADDRESS
+
+    # Альтернативно через Foundry
+    forge verify-contract --chain-id 245022926 CONTRACT_ADDRESS \
+      src/MilestoneEscrow.sol:MilestoneEscrow \
+      --verifier-url https://neon-devnet.blockscout.com/api \
+      --verifier blockscout
+    ```
+
   - [ ] ABI export для frontend интеграции
   - [ ] Address registry для deployed контрактов
 
@@ -373,7 +386,7 @@
         method: 'wallet_addEthereumChain',
         params: [
           {
-            chainId: '0xE9AC0CE',
+            chainId: '0xE9AC0CE', // 245022926 in hex
             chainName: 'Neon EVM DevNet',
             nativeCurrency: {
               name: 'NEON',
@@ -381,6 +394,7 @@
               decimals: 18,
             },
             rpcUrls: ['https://devnet.neonevm.org'],
+            blockExplorerUrls: ['https://neon-devnet.blockscout.com'],
           },
         ],
       });

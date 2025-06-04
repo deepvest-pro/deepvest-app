@@ -3,7 +3,7 @@
 import { ReactNode } from 'react';
 import { AuthProvider } from './auth-provider';
 import { TanStackQueryProvider } from '@/lib/react-query/provider';
-import { ToastProvider } from '@/components/layout/ToastProvider';
+import { ToastProvider } from '@/providers/ToastProvider';
 import type { Session } from '@supabase/supabase-js';
 import type { UserData } from '@/types/auth';
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useForm, UseFormProps, FieldValues } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useToast } from '@/components/layout/ToastProvider';
+import { useToast } from '@/providers/ToastProvider';
 
 interface UseFormHandlerProps<T extends FieldValues> {
   schema: z.ZodSchema<T>;

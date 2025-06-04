@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { getUserData } from '@/lib/react-query/auth-actions';
-import { ProtectedRoute } from '@/components/auth/protected-route';
+import { ProtectedRoute } from '@/components/auth';
 import { ProfileContent } from './profile-content';
 
 export const dynamic = 'force-dynamic';

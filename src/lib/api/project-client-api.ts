@@ -162,7 +162,11 @@ export const uploadFile = async (projectId: string, file: File) => {
  */
 export const createDocument = async (projectId: string, fileName: string, fileUrl: string) => {
   // Generate slug from filename (API will make it unique)
-  const slug = generateSlug(fileName);
+  const slugResponse = await generateSlug(fileName, { removeFileExtension: true });
+
+  if (slugResponse.error || !slugResponse.data) {
+    throw new Error(`Failed to generate slug: ${slugResponse.error || 'No slug data returned'}`);
+  }
 
   const response = await fetch(`/api/projects/${projectId}/documents`, {
     method: 'POST',
@@ -171,7 +175,7 @@ export const createDocument = async (projectId: string, fileName: string, fileUr
     },
     body: JSON.stringify({
       title: removeFileExtension(fileName), // Remove extension for title
-      slug: slug,
+      slug: slugResponse.data,
       content_type: 'presentation',
       file_urls: [fileUrl],
       description: 'Presentation uploaded via drag & drop',
@@ -261,7 +265,7 @@ export const generateProjectData = async (
 
   // Parse the JSON from the result string
   const { parseAIResponse } = await import('@/lib/utils/project-helpers');
-  return parseAIResponse(result.result);
+  return parseAIResponse(result.data.result);
 };
 
 /**
@@ -310,6 +314,17 @@ export const createTeamFromAI = async (
 
   for (const member of teamData) {
     try {
+      // Ensure positions array is not empty - add fallback if needed
+      const positions =
+        member.positions && member.positions.length > 0 ? member.positions : ['Team Member'];
+
+      console.log(
+        `Creating team member: ${member.name}, original positions:`,
+        member.positions,
+        'final positions:',
+        positions,
+      );
+
       const teamMemberData = {
         project_id: projectId,
         author_id: authorId,
@@ -321,7 +336,7 @@ export const createTeamFromAI = async (
         city: null,
         is_founder: true,
         equity_percent: null,
-        positions: member.positions,
+        positions: positions,
         status: 'active' as const,
         x_url: null,
         github_url: null,

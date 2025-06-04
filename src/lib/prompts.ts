@@ -14,7 +14,7 @@ export const PROMPTS = {
    * Project data generation prompt for creating projects from presentations
    * Used to extract structured project information from presentation content
    */
-  PROJECT_DATA_GENERATION: `Analyze the following presentation content and extract key project information. Return ONLY a valid JSON object with the following structure, no explanations or additional text:
+  PROJECT_DATA_GENERATION: `Analyze the following presentation content and extract key project information. Even if the content seems incomplete or unclear, try to infer reasonable project details from any available information. Return ONLY a valid JSON object with the following structure, no explanations or additional text:
 
 {
   "name": "Project name (required, max 100 characters)",
@@ -33,12 +33,14 @@ export const PROMPTS = {
 }
 
 Rules for project data:
-1. Extract the most relevant project name from the content
-2. Create a comprehensive description that captures the essence of the project
-3. Determine the most appropriate status based on the content
+1. Extract the most relevant project name from the content. If no clear name exists, create one based on the main topic/theme
+2. Create a comprehensive description that captures the essence of the project. If content is limited, infer from available context
+3. Determine the most appropriate status based on the content. Default to "idea" if unclear
 4. Only include country/city if explicitly mentioned
-5. If no clear slogan exists, omit the field
+5. If no clear slogan exists, omit the field (set to null)
 6. Ensure all text is clean and professional
+7. **IMPORTANT**: Never return "N/A" or "No project information found" - always try to extract or infer meaningful information
+8. If the content appears to be a presentation, document, or any structured content, treat it as project-related material
 
 Rules for team extraction:
 1. Look for team/about us/founders/people sections in the presentation
@@ -58,6 +60,7 @@ Rules for team extraction:
       - Multiple technologies across stack → "Full Stack Developer"
    - **Context Clues**: Use surrounding text, descriptions, or context to infer actual business roles
    - **Default Inference**: If no clear position is mentioned but technical skills are listed, use "Developer" as fallback
+   - **Unknown Position Fallback**: If no position or skills can be determined, use "Team Member" as default
 5. If the current user ({{USER_NAME}} <{{USER_EMAIL}}>) is found in the presentation:
   - Include their existing roles from the presentation (applying position detection rules above)
   - Always add "CEO" to their positions array (even if not mentioned)

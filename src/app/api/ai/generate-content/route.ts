@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createAPIHandler } from '@/lib/api/base-handler';
 import { APIError } from '@/lib/api/middleware/auth';
+import { withRetry } from '@/lib/api/gemini-utils';
 import {
   GenerateContentResponse,
   GeminiGenerateRequest,
@@ -16,7 +17,7 @@ const generateContentRequestSchema = z.object({
 });
 
 /**
- * Generate content using Gemini API
+ * Generate content using Gemini API with retry logic
  */
 async function generateWithGemini(prompt: string, apiKey: string): Promise<string> {
   const geminiUrl =
@@ -38,56 +39,60 @@ async function generateWithGemini(prompt: string, apiKey: string): Promise<strin
     },
   };
 
-  try {
+  return withRetry(async () => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), AI_TIMEOUT);
 
-    const response = await fetch(`${geminiUrl}?key=${apiKey}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-      signal: controller.signal,
-    });
+    try {
+      const response = await fetch(`${geminiUrl}?key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
 
-    clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
 
-    if (!response.ok) {
-      throw new APIError(`Gemini API error: ${response.status} ${response.statusText}`, 500);
-    }
+      if (!response.ok) {
+        throw new APIError(`Gemini API error: ${response.status} ${response.statusText}`, 500);
+      }
 
-    const data: GeminiGenerateResponse = await response.json();
+      const data: GeminiGenerateResponse = await response.json();
 
-    // Handle API errors
-    if (data.error) {
-      throw new APIError(`Gemini API error: ${data.error.message}`, 500);
-    }
+      // Handle API errors
+      if (data.error) {
+        throw new APIError(`Gemini API error: ${data.error.message}`, 500);
+      }
 
-    // Extract response text
-    if (data.candidates && data.candidates.length > 0) {
-      const candidate = data.candidates[0];
-      if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
-        const resultText = candidate.content.parts[0].text;
-        if (resultText) {
-          return resultText.trim();
+      // Extract response text
+      if (data.candidates && data.candidates.length > 0) {
+        const candidate = data.candidates[0];
+        if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
+          const resultText = candidate.content.parts[0].text;
+          if (resultText) {
+            return resultText.trim();
+          }
         }
       }
-    }
 
-    throw new APIError('No content generated from Gemini API', 500);
-  } catch (error) {
-    if (error instanceof APIError) {
-      throw error;
-    }
-    if (error instanceof Error) {
-      if (error.name === 'AbortError') {
-        throw new APIError('Gemini API request timeout', 408);
+      throw new APIError('No content generated from Gemini API', 500);
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      if (error instanceof APIError) {
+        throw error;
       }
-      throw new APIError(`Gemini API error: ${error.message}`, 500);
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          throw new APIError('Gemini API request timeout', 408);
+        }
+        throw new APIError(`Gemini API error: ${error.message}`, 500);
+      }
+      throw new APIError('Failed to generate content with Gemini API', 500);
     }
-    throw new APIError('Failed to generate content with Gemini API', 500);
-  }
+  });
 }
 
 /**

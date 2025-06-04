@@ -387,6 +387,33 @@ async function claimRefund(contractAddress: string) {
 
 ## 🔧 Implementation Details
 
+### Neon EVM Specific Considerations
+
+#### Oracle Integration Challenges
+
+Согласно официальной документации Neon EVM:
+
+- Частые oracle updates могут вызывать transaction restarts
+- Прямое чтение из Pyth контракта добавляет 20+ Solana accounts в transactions
+- Рекомендуется использовать caching механизмы для oracle данных
+
+```solidity
+// Рекомендуемый подход для oracle integration
+contract MilestoneEscrow {
+    uint256 public lastPriceUpdate;
+    uint256 public cachedUSDCPrice;
+    uint256 public constant PRICE_STALENESS_THRESHOLD = 3600; // 1 hour
+
+    function getCachedPrice() internal view returns (uint256) {
+        require(
+            block.timestamp - lastPriceUpdate < PRICE_STALENESS_THRESHOLD,
+            "Price data stale"
+        );
+        return cachedUSDCPrice;
+    }
+}
+```
+
 ### Contract Security Patterns
 
 #### ReentrancyGuard

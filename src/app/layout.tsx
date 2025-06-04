@@ -2,7 +2,8 @@ import React from 'react';
 import type { Metadata } from 'next';
 import { Providers } from '@/lib/auth/providers';
 import { getUserData } from '@/lib/react-query/auth-actions';
-import { NavBar, RootLayoutContent } from '@/components/layout';
+import { RootLayoutContent } from '@/components/layout';
+import { NavBar } from '@/components/layout/NavBar/NavBar';
 
 import '../styles/global/globals.css';
 import '../styles/app.scss';
@@ -10,6 +11,18 @@ import '../styles/app.scss';
 export const metadata: Metadata = {
   title: 'DeepVest - Investment Platform',
   description: 'A modern investment platform for project funding',
+  icons: {
+    icon: [
+      { url: '/favicon-96x96.png', sizes: '96x96', type: 'image/png' },
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+    shortcut: '/favicon.ico',
+    apple: '/apple-touch-icon.png',
+  },
+  manifest: '/site.webmanifest',
+  appleWebApp: {
+    title: 'DeepVest',
+  },
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

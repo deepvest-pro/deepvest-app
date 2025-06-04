@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { getUserData } from '@/lib/react-query/auth-actions';
-import { ResetPasswordForm } from '@/components/auth/reset-password-form';
+import { ResetPasswordForm } from '@/components/auth';
 
 export const metadata: Metadata = {
   title: 'Reset Password - DeepVest',

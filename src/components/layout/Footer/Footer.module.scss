@@ -1,0 +1,73 @@
+@use '../../../styles/scss/variables' as var;
+@use '../../../styles/scss/mixins' as mixins;
+
+.footer {
+  background: var(--gray-2);
+  border-top: 1px solid var(--gray-5);
+  margin-top: 24px;
+  padding: var(--space-6) 0;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 var(--space-6);
+}
+
+.content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+
+  @include mixins.breakpoint(md-down) {
+    flex-direction: column;
+    text-align: center;
+    gap: var(--space-3);
+  }
+}
+
+.copyright {
+  color: var(--text-secondary);
+  font-size: var(--font-size-2);
+}
+
+.socialLinks {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.socialLink {
+  color: var(--text-secondary);
+  transition: color 0.2s ease;
+  padding: var(--space-2);
+  border-radius: var(--radius-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    color: var(--flow-green);
+    background-color: var(--flow-green-pale);
+  }
+}
+
+.brandSection {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.logo {
+  flex-shrink: 0;
+}
+
+.brandText {
+  background: var(--gradient-accent);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 600;
+}

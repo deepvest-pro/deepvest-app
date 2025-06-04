@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getUserWithProfile } from '@/lib/supabase/client';
-import { NewProjectPageContent } from '@/components/projects/NewProjectPageContent';
+import { NewProjectPageContent } from '@/components/projects';
 
 export const dynamic = 'force-dynamic';
 

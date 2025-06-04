@@ -1,0 +1,253 @@
+@use '../../../styles/scss/variables' as var;
+@use '../../../styles/scss/mixins' as mix;
+
+.leaderboardContainer {
+  width: 100%;
+}
+
+.projectLink {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+
+  &:hover {
+    .projectCard {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 20px 40px rgba(0, 168, 107, 0.15);
+      border-color: var(--flow-green);
+    }
+
+    .hoverOverlay {
+      opacity: 1;
+    }
+
+    .projectLogo {
+      transform: scale(1.05);
+    }
+
+    .projectTitle {
+      color: var(--flow-green);
+    }
+  }
+}
+
+.projectCard {
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+}
+
+.hoverOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(0, 168, 107, 0.05) 0%, rgba(79, 70, 229, 0.05) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.projectLogo {
+  transition: all 0.3s ease;
+}
+
+.rankScoreDisplay {
+  flex-shrink: 0;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 90px;
+  padding: 8px;
+}
+
+.rankEmoji {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.rankLabel {
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.scoreDisplay {
+  text-align: center;
+  background: rgba(0, 168, 107, 0.1);
+  border-radius: 8px;
+  padding: 8px 12px;
+  border: 1px solid rgba(0, 168, 107, 0.2);
+
+  .scoreValue {
+    line-height: 1;
+    font-weight: 700;
+    font-size: 28px;
+    display: block;
+    color: var(--flow-green);
+  }
+
+  .scoreMax {
+    font-size: 11px;
+    color: var(--gray-9);
+    margin-top: 2px;
+    display: block;
+  }
+}
+
+.projectContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.projectHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.projectInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.projectTitle {
+  transition: color 0.3s ease;
+}
+
+.projectBadges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.quickMetrics {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+
+  .metric {
+    font-size: 14px;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+}
+
+.projectFooter {
+  margin-top: 8px;
+}
+
+.lastAnalyzed {
+  font-size: 11px;
+  color: var(--gray-9);
+}
+
+.emptyState {
+  text-align: center;
+  padding: 48px 24px;
+
+  .emptyTitle {
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .emptyDescription {
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+  }
+}
+
+.footer {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--gray-6);
+  text-align: center;
+
+  .footerText {
+    font-size: 12px;
+    color: var(--gray-9);
+  }
+}
+
+// Mobile responsive styles
+@include mix.breakpoint(md) {
+  .rankScoreDisplay {
+    min-width: 80px;
+    gap: 6px;
+
+    .scoreDisplay {
+      padding: 6px 8px;
+
+      .scoreValue {
+        font-size: 24px;
+      }
+    }
+  }
+
+  .rankEmoji {
+    font-size: 20px;
+  }
+
+  .quickMetrics {
+    gap: 24px;
+
+    .metric {
+      font-size: 13px;
+    }
+  }
+}
+
+@include mix.breakpoint(sm) {
+  .projectCard {
+    .projectLink:hover & {
+      transform: none;
+      scale: none;
+    }
+  }
+
+  .rankScoreDisplay {
+    min-width: 70px;
+    gap: 4px;
+    padding: 4px;
+
+    .scoreDisplay {
+      padding: 4px 6px;
+
+      .scoreValue {
+        font-size: 20px;
+      }
+
+      .scoreMax {
+        font-size: 10px;
+      }
+    }
+  }
+
+  .rankEmoji {
+    font-size: 18px;
+  }
+
+  .rankLabel {
+    font-size: 10px;
+  }
+
+  .quickMetrics {
+    gap: 16px;
+
+    .metric {
+      font-size: 12px;
+      white-space: normal;
+    }
+  }
+}

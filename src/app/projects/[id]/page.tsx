@@ -8,8 +8,8 @@ import {
 import { getCurrentUser } from '@/lib/supabase/client';
 import { checkUserProjectRole, getProjectCoreStatus } from '@/lib/supabase/helpers';
 import type { ProjectDocumentWithAuthor } from '@/lib/supabase/repositories/project-documents';
-import { ProjectContent } from '@/components/projects/ProjectContent';
 import { TeamMember } from '@/types/supabase';
+import { ProjectContent } from '@/components/projects';
 
 export const dynamic = 'force-dynamic';
 

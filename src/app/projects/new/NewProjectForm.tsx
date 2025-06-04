@@ -8,7 +8,7 @@ import { ProjectStatus } from '@/types/supabase';
 import { ValidationSchemas } from '@/lib/validations';
 import { APIClient } from '@/lib/utils/api';
 import { useFormHandler } from '@/hooks/useFormHandler';
-import { useToastHelpers } from '@/components/layout/ToastProvider';
+import { useToastHelpers } from '@/providers/ToastProvider';
 import { StyledInput, StyledTextArea } from '@/components/forms';
 
 interface NewProjectFormProps {
