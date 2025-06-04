@@ -1,0 +1,11 @@
+{
+  "extends": "next/core-web-vitals",
+  "ignorePatterns": [
+    "src/lib/hooks/useCivicAuth.ts",
+    "src/lib/auth/civic-auth-helpers.ts",
+    "src/app/api/auth/civic-supabase-login/route.ts",
+    "src/app/auth/demo/page.tsx",
+    "src/app/auth/test-login/page.tsx",
+    "src/lib/auth/test-civic-login.ts"
+  ]
+}

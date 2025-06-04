@@ -1,5 +1,7 @@
 import { NextRequest } from 'next/server';
 import { updateSession } from './src/lib/supabase/middleware';
+// TODO: Fix Civic Auth middleware integration when the package structure is better understood
+// import { middleware as civicAuthMiddleware } from "@civic/auth-web3/nextjs";
 
 /**
  * Middleware function to handle auth session updates and protected routes
@@ -16,6 +18,9 @@ export async function middleware(request: NextRequest) {
 
   return response;
 }
+
+// TODO: Enable Civic Auth middleware integration once we resolve the package structure
+// export default civicAuthMiddleware(middleware);
 
 /**
  * Configure which paths the middleware should run on

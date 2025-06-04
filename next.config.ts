@@ -1,3 +1,4 @@
+import { createCivicAuthPlugin } from "@civic/auth-web3/nextjs";
 import type { NextConfig } from 'next';
 import type { RemotePattern } from 'next/dist/shared/lib/image-config';
 
@@ -23,7 +24,7 @@ if (supabaseHostname) {
   });
 }
 
-const nextConfig: NextConfig = {
+const baseNextConfig: NextConfig = {
   /* config options here */
   poweredByHeader: false,
   reactStrictMode: true,
@@ -49,4 +50,9 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+const withCivicAuth = createCivicAuthPlugin({
+  clientId: "00ca0249-682b-4d05-bfc0-3fee6046676d", // Civic Client ID
+  // Add other Civic config options here if needed
+});
+
+export default withCivicAuth(baseNextConfig);
