@@ -45,21 +45,6 @@ export default function TestCivicLogin() {
           </Text>
           
           <Flex direction="column" gap="3">
-            <TextField.Root>
-              <TextField.Input 
-                placeholder="test@example.org" 
-                value={email} 
-                onChange={(e) => setEmail(e.target.value)} 
-              />
-            </TextField.Root>
-            
-            <TextField.Root>
-              <TextField.Input 
-                placeholder="ID Token (optional)" 
-                value={idToken} 
-                onChange={(e) => setIdToken(e.target.value)} 
-              />
-            </TextField.Root>
             
             <Button 
               onClick={handleTestLogin} 

@@ -68,7 +68,7 @@ export default function CivicAuthDemo() {
             The authentication flow works as follows:
           </Text>
           
-          <Text as="ul" size="2">
+          <Text size="2">
             <li>User clicks "Login with Civic" and authenticates through the Civic Auth system</li>
             <li>After successful Civic authentication, our custom API endpoint links the Civic account with Supabase</li>
             <li>The user is now authenticated in both systems</li>

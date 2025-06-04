@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useCallback, useEffect } from 'react';
 import { useUser, useToken } from '@civic/auth-web3/react';
 import { useRouter } from 'next/navigation';
