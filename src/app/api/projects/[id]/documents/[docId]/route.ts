@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createSupabaseServerClient } from '@/lib/supabase/client';
-import { updateSnapshotContents } from '@/lib/supabase/helpers';
+import { syncSnapshotData } from '@/lib/utils/snapshot-sync';
 
 // Validation schema for updating project content
 const updateContentSchema = z.object({
@@ -196,7 +196,7 @@ export async function PUT(
     }
 
     // Update snapshot contents to mark it as changed
-    await updateSnapshotContents(projectId);
+    await syncSnapshotData(projectId);
 
     return NextResponse.json({ document });
   } catch (error) {
@@ -274,7 +274,7 @@ export async function DELETE(
     }
 
     // Update snapshot contents to mark it as changed
-    await updateSnapshotContents(projectId);
+    await syncSnapshotData(projectId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

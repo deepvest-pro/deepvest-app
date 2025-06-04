@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { checkUserProjectRole } from '@/lib/supabase/helpers';
 import { createSupabaseServerClient } from '@/lib/supabase/client';
 import { updateTeamMemberSchema } from '@/lib/validations/team';
-import { z } from 'zod';
+import { syncSnapshotData } from '@/lib/utils/snapshot-sync';
 
 interface RouteContext {
   params: Promise<{
@@ -200,6 +201,9 @@ export async function PUT(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: 'Failed to update team member' }, { status: 500 });
     }
 
+    // Sync snapshot contents and team members to keep data up to date
+    await syncSnapshotData(projectId);
+
     return NextResponse.json({ team_member: data });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -266,6 +270,10 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     }
 
     console.log('Team member soft deleted successfully');
+
+    // Sync snapshot contents and team members to keep data up to date
+    await syncSnapshotData(projectId);
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error in DELETE /api/projects/[id]/team-members/[memberId]:', error);

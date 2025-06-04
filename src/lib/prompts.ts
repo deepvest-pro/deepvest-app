@@ -81,6 +81,52 @@ Return ONLY the JSON object, no markdown formatting or explanations.
 Content to analyze:`,
 
   /**
+   * Project investment scoring prompt for AI-powered investment analysis
+   * Used to evaluate projects from a venture capital perspective
+   */
+  PROJECT_INVESTMENT_SCORING: `You are an expert venture capital analyst with 15+ years of experience evaluating startup projects and investment opportunities. Based on the following comprehensive project information, provide a detailed investment analysis.
+
+PROJECT INFORMATION:
+{{PROJECT_DATA}}
+
+ANALYSIS INSTRUCTIONS:
+Analyze this startup project and provide a thorough investment evaluation. Consider market dynamics, competitive landscape, team capabilities, technology differentiation, business model viability, and execution risks.
+
+SCORING CRITERIA:
+- **Investment Rating (0-100)**: Overall investment attractiveness from poor (0-20) to exceptional (80-100)
+- **Market Potential (0-100)**: Target market size, growth trajectory, and market fit assessment
+- **Team Competency (0-100)**: Founding team skills, experience, track record, and team dynamics
+- **Tech Innovation (0-100)**: Technical novelty, competitive advantages, and differentiation
+- **Business Model (0-100)**: Revenue model clarity, scalability, and path to profitability
+- **Execution Risk (0-100)**: Implementation challenges, where higher scores indicate LOWER risk
+
+RESPONSE FORMAT:
+Respond ONLY with a valid JSON object. No additional text, explanations, or formatting:
+
+{
+  "score": [0-100 number representing overall investment score],
+  "investment_rating": [0-100 number for investment attractiveness],
+  "market_potential": [0-100 number for market assessment],
+  "team_competency": [0-100 number for team evaluation],
+  "tech_innovation": [0-100 number for technology assessment],
+  "business_model": [0-100 number for business model viability],
+  "execution_risk": [0-100 number where higher = lower risk],
+  "summary": "[2-3 sentence executive summary of investment potential in MARKDOWN format with emphasis (**bold**, *italic*) for key points]",
+  "research": "[Detailed 3-4 paragraph analysis in MARKDOWN format with proper headers (##), bullet points (-), emphasis (**bold**, *italic*), and clear structure. Cover: market opportunity, team assessment, technology evaluation, business model analysis, key risks and opportunities]"
+}
+
+EVALUATION GUIDELINES:
+- Be objective and data-driven in your analysis
+- Consider both opportunities and risks equally
+- Base scores on industry standards and comparable investments
+- Ensure summary and research provide actionable insights
+- Account for project stage and maturity in scoring
+- Consider market timing and competitive dynamics
+- **Format research field using Markdown** with headers, bullet points, and emphasis for better readability
+
+Remember: Provide balanced, professional analysis suitable for investment committee review.`,
+
+  /**
    * Future prompts can be added here:
    *
    * CONTENT_SUMMARIZATION: `...`,
@@ -99,4 +145,18 @@ export type PromptKey = keyof typeof PROMPTS;
  */
 export function getPrompt(key: PromptKey): string {
   return PROMPTS[key];
+}
+
+/**
+ * Helper function to get a prompt with variable substitution
+ */
+export function getPromptWithVariables(key: PromptKey, variables: Record<string, string>): string {
+  let prompt: string = PROMPTS[key];
+
+  // Replace variables in the format {{VARIABLE_NAME}}
+  Object.entries(variables).forEach(([key, value]) => {
+    prompt = prompt.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
+  });
+
+  return prompt;
 }

@@ -3,7 +3,7 @@
  */
 
 import { useMemo } from 'react';
-import { ProjectWithSnapshot } from '@/types/supabase';
+import { ProjectWithSnapshot, ProjectScoring } from '@/types/supabase';
 import { formatDate, formatStatus, getStatusColor } from '@/lib/utils/format';
 
 export interface ProjectDisplayData {
@@ -36,6 +36,10 @@ export interface ProjectDisplayData {
   isPublic: boolean;
   hasDraftToPublish: boolean;
   isEditingDraft: boolean;
+  hasScoring: boolean;
+
+  // Scoring data
+  scoring?: ProjectScoring | null;
 }
 
 /**
@@ -77,6 +81,10 @@ export const useProjectData = (project: ProjectWithSnapshot): ProjectDisplayData
       project.new_snapshot_id && project.new_snapshot_id !== project.public_snapshot_id
     );
     const isEditingDraft = hasDraftToPublish;
+    const hasScoring = !!currentSnapshot?.scoring_id;
+
+    // Scoring data
+    const scoring = currentSnapshot?.scoring;
 
     return {
       name,
@@ -97,6 +105,8 @@ export const useProjectData = (project: ProjectWithSnapshot): ProjectDisplayData
       isPublic,
       hasDraftToPublish,
       isEditingDraft,
+      hasScoring,
+      scoring,
     };
   }, [project]);
 };

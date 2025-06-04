@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { checkUserProjectRole } from '@/lib/supabase/helpers';
 import { createSupabaseServerClient } from '@/lib/supabase/client';
 import { snapshotSchema } from '@/lib/validations/project';
-import { z } from 'zod';
 
 interface RouteContext {
   params: Promise<{
@@ -122,12 +122,6 @@ export async function POST(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    console.log('POST /api/projects/[id]/snapshots - Project snapshot IDs:', {
-      public_snapshot_id: project.public_snapshot_id,
-      new_snapshot_id: project.new_snapshot_id,
-      areEqual: project.public_snapshot_id === project.new_snapshot_id,
-    });
-
     let snapshotId: string;
 
     // If new_snapshot_id exists AND differs from public_snapshot_id, we're editing a draft
@@ -137,7 +131,6 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     if (isEditingDraft) {
       // Update existing draft snapshot (new_snapshot_id differs from public_snapshot_id)
-      console.log('Updating existing draft snapshot:', project.new_snapshot_id);
       const { data: updatedSnapshot, error: updateError } = await supabase
         .from('snapshots')
         .update({
@@ -159,7 +152,6 @@ export async function POST(request: Request, { params }: RouteContext) {
       snapshotId = updatedSnapshot.id;
     } else {
       // Create new snapshot (no draft exists or new_snapshot_id equals public_snapshot_id)
-      console.log('Creating new snapshot for project:', projectId);
 
       // Get the next version number
       const { data: latestSnapshot } = await supabase
@@ -172,7 +164,31 @@ export async function POST(request: Request, { params }: RouteContext) {
 
       const nextVersion = (latestSnapshot?.version || 0) + 1;
 
-      // Create new snapshot
+      // Get the previous snapshot to copy contents and members from
+      let previousSnapshotData = null;
+      if (project.public_snapshot_id) {
+        // Copy from the current public snapshot
+        const { data: publicSnapshot } = await supabase
+          .from('snapshots')
+          .select('contents, team_members')
+          .eq('id', project.public_snapshot_id)
+          .single();
+
+        previousSnapshotData = publicSnapshot;
+      } else {
+        // If no public snapshot, try to get the latest snapshot
+        const { data: lastSnapshot } = await supabase
+          .from('snapshots')
+          .select('contents, team_members')
+          .eq('project_id', projectId)
+          .order('version', { ascending: false })
+          .limit(1)
+          .single();
+
+        previousSnapshotData = lastSnapshot;
+      }
+
+      // Create new snapshot with copied data
       const { data: newSnapshot, error: createError } = await supabase
         .from('snapshots')
         .insert({
@@ -180,6 +196,10 @@ export async function POST(request: Request, { params }: RouteContext) {
           version: nextVersion,
           author_id: user.id,
           is_locked: false,
+          // Copy contents and team_members from previous snapshot, but not scoring_id
+          contents: previousSnapshotData?.contents || null,
+          team_members: previousSnapshotData?.team_members || null,
+          scoring_id: null, // Don't copy scoring - it should be null for new snapshots
           ...validatedData,
         })
         .select()

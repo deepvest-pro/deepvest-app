@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { checkUserProjectRole, getPublicProjectTeamMembers } from '@/lib/supabase/helpers';
 import { createSupabaseServerClient } from '@/lib/supabase/client';
 import { createTeamMemberSchema } from '@/lib/validations/team';
-import { z } from 'zod';
+import { syncSnapshotData } from '@/lib/utils/snapshot-sync';
 
 interface RouteContext {
   params: Promise<{
@@ -202,6 +203,9 @@ export async function POST(request: Request, { params }: RouteContext) {
     }
 
     console.log('Team member created successfully:', data);
+
+    // Sync snapshot contents and team members to keep data up to date
+    await syncSnapshotData(projectId);
 
     return NextResponse.json({ team_member: data }, { status: 201 });
   } catch (error) {

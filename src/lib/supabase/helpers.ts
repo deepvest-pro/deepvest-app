@@ -6,15 +6,19 @@ import type {
   ExpandedUser,
   UserProfile,
   UUID,
+  ProjectScoring,
+  SnapshotWithAuthorAndScoring,
 } from '@/types/supabase';
 import { createSupabaseServerClient, getCurrentUser } from './client';
 
 /**
  * Helper function to fetch and construct snapshot with expanded author
  */
-async function fetchAndProcessSnapshot(snapshotId: UUID): Promise<Snapshot | null> {
+async function fetchAndProcessSnapshot(
+  snapshotId: UUID,
+): Promise<SnapshotWithAuthorAndScoring | null> {
   const supabase = await createSupabaseServerClient();
-  let snapshotData: Snapshot | null = null;
+  let snapshotData: SnapshotWithAuthorAndScoring | null = null;
 
   // Fetch raw snapshot data first (both for authenticated and guest users)
   const { data: rawData, error: rawError } = await supabase
@@ -53,8 +57,30 @@ async function fetchAndProcessSnapshot(snapshotId: UUID): Promise<Snapshot | nul
     }
   }
 
-  // Assign the constructed ExpandedUser to author_id, or keep the original UUID if profile fetch failed
-  snapshotData = { ...rawData, author_id: authorInfo || rawData.author_id };
+  // Fetch project scoring if scoring_id exists
+  let scoringData: ProjectScoring | null = null;
+  if (rawData.scoring_id) {
+    const { data: scoring, error: scoringError } = await supabase
+      .from('project_scoring')
+      .select('*')
+      .eq('id', rawData.scoring_id)
+      .single();
+
+    if (!scoringError && scoring) {
+      scoringData = scoring;
+    } else if (scoringError) {
+      console.warn(
+        `[fetchAndProcessSnapshot] Failed to fetch scoring for snapshot ${snapshotId}: ${scoringError.message}`,
+      );
+    }
+  }
+
+  // Assign the constructed data with author and scoring
+  snapshotData = {
+    ...rawData,
+    author_id: authorInfo || rawData.author_id,
+    scoring: scoringData,
+  };
   return snapshotData;
 }
 
@@ -129,7 +155,7 @@ export async function getProjectWithDetails(projectId: string) {
     }
   }
 
-  let publicSnapshot: Snapshot | null = null;
+  let publicSnapshot: SnapshotWithAuthorAndScoring | null = null;
   if (project.public_snapshot_id) {
     publicSnapshot = await fetchAndProcessSnapshot(project.public_snapshot_id);
     if (!publicSnapshot) {
@@ -142,7 +168,7 @@ export async function getProjectWithDetails(projectId: string) {
     }
   }
 
-  let newSnapshot: Snapshot | null = null;
+  let newSnapshot: SnapshotWithAuthorAndScoring | null = null;
   if (project.new_snapshot_id) {
     newSnapshot = await fetchAndProcessSnapshot(project.new_snapshot_id);
     if (!newSnapshot) {
@@ -876,17 +902,12 @@ export async function deleteProjectFiles(projectId: string) {
       return allFiles;
     };
 
-    console.log(`Starting deletion of files for project ${projectId}`);
-
     // List all files in the project folder recursively
     const allFiles = await listAllFiles(projectId);
 
     if (allFiles.length === 0) {
-      console.log(`No files found for project ${projectId}`);
       return { success: true, error: null };
     }
-
-    console.log(`Found ${allFiles.length} files to delete for project ${projectId}:`, allFiles);
 
     // Delete files in batches to avoid potential issues with large numbers of files
     const batchSize = 100;
@@ -897,7 +918,6 @@ export async function deleteProjectFiles(projectId: string) {
 
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i];
-      console.log(`Deleting batch ${i + 1}/${batches.length} (${batch.length} files)`);
 
       const { error: deleteError } = await supabase.storage.from('project-files').remove(batch);
 
@@ -907,7 +927,6 @@ export async function deleteProjectFiles(projectId: string) {
       }
     }
 
-    console.log(`Successfully deleted all files for project ${projectId}`);
     return { success: true, error: null };
   } catch (error) {
     console.error('Unexpected error deleting project files:', error);

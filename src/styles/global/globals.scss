@@ -1,0 +1,78 @@
+// Markdown content styles for scoring research notes
+.markdown-content {
+  h2 {
+    font-size: var(--font-size-4);
+    font-weight: 600;
+    margin: var(--space-3) 0 var(--space-2) 0;
+    color: var(--gray-12);
+    border-bottom: 1px solid var(--gray-6);
+    padding-bottom: var(--space-1);
+  }
+
+  h3 {
+    font-size: var(--font-size-3);
+    font-weight: 600;
+    margin: var(--space-2) 0 var(--space-1) 0;
+    color: var(--gray-11);
+  }
+
+  p {
+    margin: var(--space-2) 0;
+    line-height: 1.6;
+  }
+
+  ul,
+  ol {
+    margin: var(--space-2) 0;
+    padding-left: var(--space-4);
+  }
+
+  li {
+    margin: var(--space-1) 0;
+    line-height: 1.5;
+  }
+
+  strong {
+    font-weight: 600;
+    color: var(--gray-12);
+  }
+
+  em {
+    font-style: italic;
+    color: var(--gray-11);
+  }
+
+  blockquote {
+    border-left: 3px solid var(--accent-6);
+    padding-left: var(--space-3);
+    margin: var(--space-3) 0;
+    color: var(--gray-11);
+    font-style: italic;
+  }
+
+  code {
+    background: var(--gray-3);
+    padding: var(--space-1);
+    border-radius: var(--radius-1);
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+  }
+
+  pre {
+    background: var(--gray-3);
+    padding: var(--space-3);
+    border-radius: var(--radius-2);
+    overflow-x: auto;
+    margin: var(--space-3) 0;
+  }
+
+  // First paragraph should not have top margin
+  p:first-child {
+    margin-top: 0;
+  }
+
+  // Last element should not have bottom margin
+  *:last-child {
+    margin-bottom: 0;
+  }
+}

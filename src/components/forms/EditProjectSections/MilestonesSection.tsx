@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -118,6 +117,24 @@ export function MilestonesSection({
 
           <form onSubmit={onSubmit}>
             <Flex direction="column" gap="5">
+              <Box
+                style={{
+                  padding: '16px',
+                  backgroundColor: 'var(--red-2)',
+                  borderRadius: 'var(--radius-3)',
+                  border: '1px solid var(--red-6)',
+                }}
+              >
+                <Text
+                  size="2"
+                  color="red"
+                  weight="medium"
+                  style={{ display: 'block', textAlign: 'center' }}
+                >
+                  🚧 This section is not yet implemented! 🚧
+                </Text>
+              </Box>
+
               {/* Milestones List */}
               <Box>
                 <Flex justify="between" align="center" mb="3">
@@ -158,6 +175,8 @@ export function MilestonesSection({
                     <Text size="3" color="gray" mb="4">
                       Add milestones to track your project&apos;s progress and key achievements.
                     </Text>
+                    <br />
+                    <br />
                     <Button
                       type="button"
                       onClick={handleAddMilestone}

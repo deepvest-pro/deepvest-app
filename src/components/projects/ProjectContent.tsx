@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -27,6 +27,7 @@ import {
   EyeOpenIcon,
   EyeClosedIcon,
   CalendarIcon,
+  StarIcon,
 } from '@radix-ui/react-icons';
 import {
   ProjectWithSnapshot,
@@ -41,6 +42,8 @@ import { ProjectStatusBadge } from '@/components/ui/StatusBadge';
 import { useToastHelpers } from '@/components/layout/ToastProvider';
 import { ProjectDocuments } from './ProjectDocuments';
 import { ProjectTeam } from './ProjectTeam';
+import { ProjectScoringBrief } from './ProjectScoringBrief';
+import { ProjectScoringDetails } from './ProjectScoringDetails';
 
 interface ProjectContentProps {
   project: ProjectWithSnapshot;
@@ -61,11 +64,76 @@ export function ProjectContent({
   const [documents] = useState<ProjectContentWithAuthor[]>(initialDocuments);
   const [team] = useState<TeamMember[]>(initialTeam);
   const [isPending, startTransition] = useTransition();
+  const [isScoringPending, setScoringPending] = useState(false);
   const { success: toastSuccess, error: toastError } = useToastHelpers();
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Use custom hooks for data processing
   const projectData = useProjectData(project);
   const permissions = useProjectPermissions(project, userId);
+
+  // Handle scroll to scoring details
+  const handleScrollToScoring = () => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  // Handle scoring generation
+  const handleGenerateScoring = async () => {
+    if (!permissions.isOwner) {
+      toastError('Only project owners can generate scoring.');
+      return;
+    }
+
+    setScoringPending(true);
+    try {
+      const response = await fetch(`/api/projects/${project.id}/scoring`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ force: false }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toastSuccess('Project scoring generated successfully!');
+
+        // Optimistically update project state to reflect that scoring now exists
+        setProject(prev => {
+          const updatedProject = { ...prev };
+
+          // Update the current snapshot with scoring_id and scoring data
+          if (updatedProject.public_snapshot && !updatedProject.new_snapshot_id) {
+            // No draft, update public snapshot
+            updatedProject.public_snapshot = {
+              ...updatedProject.public_snapshot,
+              scoring_id: result.data.id,
+              scoring: result.data,
+            };
+          } else if (updatedProject.new_snapshot) {
+            // Draft exists, update new snapshot
+            updatedProject.new_snapshot = {
+              ...updatedProject.new_snapshot,
+              scoring_id: result.data.id,
+              scoring: result.data,
+            };
+          }
+
+          return updatedProject as ProjectWithSnapshot;
+        });
+      } else {
+        toastError(result.error || 'Failed to generate project scoring.');
+      }
+    } catch (error) {
+      console.error('Error generating scoring:', error);
+      toastError('An unexpected error occurred while generating scoring.');
+    } finally {
+      setScoringPending(false);
+    }
+  };
 
   if (!project) {
     return (
@@ -209,6 +277,22 @@ export function ProjectContent({
                       {isPending ? 'Saving...' : 'Save Changes'}
                     </Button>
                   )}
+
+                  {permissions.isOwner &&
+                    !projectData.hasDraftToPublish &&
+                    !projectData.hasScoring && (
+                      <Button
+                        variant="solid"
+                        color="orange"
+                        size="2"
+                        style={{ width: '100%' }}
+                        onClick={handleGenerateScoring}
+                        disabled={isScoringPending}
+                      >
+                        <StarIcon />
+                        {isScoringPending ? 'Generating...' : 'Make Scoring'}
+                      </Button>
+                    )}
 
                   {permissions.isOwner && (
                     <Button
@@ -370,6 +454,17 @@ export function ProjectContent({
                 <Separator my="3" />
                 <Text size="2">{projectData.description}</Text>
               </Box>
+
+              {/* Scoring Brief */}
+              {projectData.scoring && (
+                <Box>
+                  <Separator my="3" />
+                  <ProjectScoringBrief
+                    scoring={projectData.scoring}
+                    onMoreDetails={handleScrollToScoring}
+                  />
+                </Box>
+              )}
             </Flex>
           </Card>
 
@@ -380,6 +475,13 @@ export function ProjectContent({
           <Box mt="6">
             <ProjectTeam teamMembers={team} />
           </Box>
+
+          {/* Scoring Details Section */}
+          {projectData.scoring && (
+            <Box mt="6" ref={scrollRef}>
+              <ProjectScoringDetails scoring={projectData.scoring} />
+            </Box>
+          )}
 
           {/* Additional sections can be added here */}
           {/* For example: milestones, funding rounds, etc. */}

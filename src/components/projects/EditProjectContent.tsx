@@ -28,11 +28,11 @@ import {
 } from '@radix-ui/react-icons';
 import { ProjectWithSnapshot, ProjectPermission, TeamMember } from '@/types/supabase';
 import { formatDate } from '@/lib/utils/format';
-import { useToastHelpers } from '@/components/layout/ToastProvider';
-import { StatusBadge } from '@/components/ui/StatusBadge';
 import { deleteProject } from '@/app/projects/[id]/actions';
 import { useProjectPermissions } from '@/lib/hooks/useProjectData';
 import { getCurrentUser } from '@/lib/supabase/client';
+import { useToastHelpers } from '@/components/layout/ToastProvider';
+import { StatusBadge } from '@/components/ui/StatusBadge';
 
 // Import section components
 import {
@@ -178,14 +178,12 @@ export function EditProjectContent({ project }: EditProjectContentProps) {
 
         case 'funding':
           // For now, funding data is not saved to DB as the schema doesn't support it yet
-          console.log('Funding data (not saved to DB yet):', data);
           success('Funding information saved locally (DB schema update needed)');
           setCompletedSections(prev => new Set([...prev, sectionId]));
           return;
 
         case 'milestones':
           // For now, milestones data is not saved to DB as the schema doesn't support it yet
-          console.log('Milestones data (not saved to DB yet):', data);
           success('Milestones saved locally (DB schema update needed)');
           setCompletedSections(prev => new Set([...prev, sectionId]));
           return;
@@ -210,7 +208,6 @@ export function EditProjectContent({ project }: EditProjectContentProps) {
 
       // If slug changed in common info, also update the project
       if (sectionId === 'common' && data.slug && data.slug !== project.slug) {
-        console.log('Updating project slug from', project.slug, 'to', data.slug);
         const projectResponse = await fetch(`/api/projects/${project.id}`, {
           method: 'PUT',
           headers: {
@@ -224,8 +221,6 @@ export function EditProjectContent({ project }: EditProjectContentProps) {
           console.error('Failed to update project slug:', errorData);
           throw new Error(errorData.error || 'Failed to update project slug');
         }
-
-        console.log('Project slug updated successfully');
       }
 
       // Mark section as completed
@@ -419,11 +414,13 @@ export function EditProjectContent({ project }: EditProjectContentProps) {
                   <Badge size="2" color={isEditingDraft ? 'amber' : 'blue'} mb="2">
                     {isEditingDraft ? 'Editing Draft' : 'Creating New Draft'}
                   </Badge>
-                  <Text size="2" color={isEditingDraft ? 'amber' : 'blue'}>
-                    {isEditingDraft
-                      ? '📝 You are editing a draft version. Changes will be saved to your draft until published.'
-                      : '✨ You are creating a new draft. A new version will be created when you save changes.'}
-                  </Text>
+                  <div>
+                    <Text size="2" color={isEditingDraft ? 'amber' : 'blue'}>
+                      {isEditingDraft
+                        ? '📝 You are editing a draft version. Changes will be saved to your draft until published.'
+                        : '✨ You are creating a new draft. A new version will be created when you save changes.'}
+                    </Text>
+                  </div>
                 </Box>
 
                 {/* Progress Indicator */}

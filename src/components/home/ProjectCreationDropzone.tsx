@@ -157,10 +157,24 @@ export function ProjectCreationDropzone() {
         // Step 9: Create team members from AI data
         updateProcessingStep('adding-owner', 90, 'Setting up project team...');
         if (aiProjectData.team && aiProjectData.team.length > 0) {
-          const createdMembers = await createTeamFromAI(project.id, aiProjectData.team, user.id);
-          console.log(`Created ${createdMembers.length} team members from presentation`);
-        } else {
-          console.log('No team data found in presentation, skipping team creation');
+          await createTeamFromAI(project.id, aiProjectData.team, user.id);
+        }
+
+        // Final sync to ensure snapshot has all current data
+        try {
+          const syncResponse = await fetch(`/api/projects/${project.id}/sync-snapshot`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (!syncResponse.ok) {
+            console.warn('Warning: Snapshot sync failed, but project was created successfully');
+          }
+        } catch (syncError) {
+          console.warn('Warning: Error syncing snapshot:', syncError);
+          // Don't fail the entire process if sync fails
         }
 
         // Step 10: Complete

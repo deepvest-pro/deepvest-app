@@ -293,6 +293,7 @@ CREATE TABLE IF NOT EXISTS public.snapshots (
   video_urls TEXT[],
   contents UUID[], -- Array of ProjectContent IDs
   team_members UUID[], -- Array of TeamMember IDs
+  scoring_id UUID, -- Reference to ProjectScoring for this snapshot
   author_id UUID NOT NULL REFERENCES auth.users(id), -- Refers to the user who created/owns this snapshot version
   is_locked BOOLEAN NOT NULL DEFAULT false, -- Indicates if snapshot can be edited (locked after publish)
   UNIQUE(project_id, version)
@@ -302,6 +303,7 @@ COMMENT ON COLUMN public.snapshots.author_id IS 'User who created this version o
 COMMENT ON COLUMN public.snapshots.is_locked IS 'True if the snapshot is published and locked from further edits.';
 COMMENT ON COLUMN public.snapshots.contents IS 'Array of ProjectContent UUIDs associated with this snapshot.';
 COMMENT ON COLUMN public.snapshots.team_members IS 'Array of TeamMember UUIDs associated with this snapshot.';
+COMMENT ON COLUMN public.snapshots.scoring_id IS 'UUID reference to project_scoring table for this snapshot.';
 
 -- Foreign key constraints from projects to snapshots (defined after snapshots table)
 ALTER TABLE public.projects DROP CONSTRAINT IF EXISTS fk_public_snapshot_id;
@@ -1073,3 +1075,384 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.soft_delete_team_member(UUID, UUID, UUID) TO authenticated;
 COMMENT ON FUNCTION public.soft_delete_team_member(UUID, UUID, UUID) IS 'Soft deletes a team member, bypassing RLS policies with proper permission checks.';
+
+
+-- ==========================================
+-- Project Scoring ENUM Type & Table
+-- Stores AI-generated investment scoring for project snapshots.
+-- ==========================================
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'scoring_status_enum') THEN
+    CREATE TYPE scoring_status_enum AS ENUM ('new', 'in_progress', 'completed', 'failed');
+  END IF;
+END$$;
+
+CREATE TABLE IF NOT EXISTS public.project_scoring (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  snapshot_id UUID NOT NULL REFERENCES public.snapshots(id) ON DELETE CASCADE,
+  status scoring_status_enum NOT NULL DEFAULT 'new',
+  investment_rating NUMERIC(5,2), -- 0.00 to 100.00
+  market_potential NUMERIC(5,2), -- 0.00 to 100.00
+  team_competency NUMERIC(5,2), -- 0.00 to 100.00
+  tech_innovation NUMERIC(5,2), -- 0.00 to 100.00
+  business_model NUMERIC(5,2), -- 0.00 to 100.00
+  execution_risk NUMERIC(5,2), -- 0.00 to 100.00
+  summary TEXT,
+  research TEXT,
+  score NUMERIC(5,2), -- 0.00 to 100.00 (calculated overall score)
+  ai_model_version TEXT NOT NULL,
+  UNIQUE(snapshot_id), -- One scoring per snapshot
+  CONSTRAINT chk_investment_rating CHECK (investment_rating IS NULL OR (investment_rating >= 0 AND investment_rating <= 100)),
+  CONSTRAINT chk_market_potential CHECK (market_potential IS NULL OR (market_potential >= 0 AND market_potential <= 100)),
+  CONSTRAINT chk_team_competency CHECK (team_competency IS NULL OR (team_competency >= 0 AND team_competency <= 100)),
+  CONSTRAINT chk_tech_innovation CHECK (tech_innovation IS NULL OR (tech_innovation >= 0 AND tech_innovation <= 100)),
+  CONSTRAINT chk_business_model CHECK (business_model IS NULL OR (business_model >= 0 AND business_model <= 100)),
+  CONSTRAINT chk_execution_risk CHECK (execution_risk IS NULL OR (execution_risk >= 0 AND execution_risk <= 100)),
+  CONSTRAINT chk_score CHECK (score IS NULL OR (score >= 0 AND score <= 100))
+);
+COMMENT ON TABLE public.project_scoring IS 'Stores AI-generated investment scoring analysis for project snapshots.';
+COMMENT ON COLUMN public.project_scoring.snapshot_id IS 'References the snapshot this scoring belongs to.';
+COMMENT ON COLUMN public.project_scoring.status IS 'Current status of the scoring process.';
+COMMENT ON COLUMN public.project_scoring.investment_rating IS 'Investment attractiveness rating (0-100).';
+COMMENT ON COLUMN public.project_scoring.market_potential IS 'Market potential assessment (0-100).';
+COMMENT ON COLUMN public.project_scoring.team_competency IS 'Team competency evaluation (0-100).';
+COMMENT ON COLUMN public.project_scoring.tech_innovation IS 'Technology innovation score (0-100).';
+COMMENT ON COLUMN public.project_scoring.business_model IS 'Business model viability score (0-100).';
+COMMENT ON COLUMN public.project_scoring.execution_risk IS 'Execution risk assessment (0-100).';
+COMMENT ON COLUMN public.project_scoring.summary IS 'AI-generated summary of the scoring analysis.';
+COMMENT ON COLUMN public.project_scoring.research IS 'Detailed research data used for scoring.';
+COMMENT ON COLUMN public.project_scoring.score IS 'Overall calculated investment score (0-100).';
+COMMENT ON COLUMN public.project_scoring.ai_model_version IS 'Version of the AI model used for scoring generation.';
+
+-- Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_project_scoring_snapshot_id ON public.project_scoring(snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_project_scoring_status ON public.project_scoring(status);
+CREATE INDEX IF NOT EXISTS idx_project_scoring_score ON public.project_scoring(score);
+CREATE INDEX IF NOT EXISTS idx_project_scoring_created_at ON public.project_scoring(created_at);
+
+-- Trigger for project_scoring updated_at
+DROP TRIGGER IF EXISTS update_project_scoring_updated_at ON public.project_scoring;
+CREATE TRIGGER update_project_scoring_updated_at
+  BEFORE UPDATE ON public.project_scoring
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Enable RLS for project_scoring
+ALTER TABLE public.project_scoring ENABLE ROW LEVEL SECURITY;
+
+-- Function to check if a scoring is publicly visible (SECURITY DEFINER)
+-- Used in RLS policy for public.project_scoring
+CREATE OR REPLACE FUNCTION public.is_scoring_publicly_visible(target_snapshot_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.snapshots s
+    JOIN public.projects p ON p.id = s.project_id
+    WHERE s.id = target_snapshot_id
+      AND p.is_public = true
+      AND p.public_snapshot_id = target_snapshot_id
+      AND p.is_archived = false
+  );
+$$;
+GRANT EXECUTE ON FUNCTION public.is_scoring_publicly_visible(UUID) TO anon, authenticated;
+COMMENT ON FUNCTION public.is_scoring_publicly_visible(UUID) IS 'Checks if a scoring is publicly visible based on project and snapshot status; bypasses RLS for efficient checks.';
+
+-- Function to check if user has project access for scoring (SECURITY DEFINER)
+-- Used in RLS policy for public.project_scoring
+CREATE OR REPLACE FUNCTION public.user_has_scoring_access(target_snapshot_id UUID, user_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.snapshots s
+    JOIN public.project_permissions pp ON pp.project_id = s.project_id
+    WHERE s.id = target_snapshot_id
+      AND pp.user_id = user_has_scoring_access.user_id
+  );
+$$;
+GRANT EXECUTE ON FUNCTION public.user_has_scoring_access(UUID, UUID) TO authenticated;
+COMMENT ON FUNCTION public.user_has_scoring_access(UUID, UUID) IS 'Checks if a user has access to scoring through project permissions; bypasses RLS for efficient checks.';
+
+-- Policies for project_scoring
+DROP POLICY IF EXISTS "Public scoring is viewable by everyone" ON public.project_scoring;
+CREATE POLICY "Public scoring is viewable by everyone" ON public.project_scoring
+  FOR SELECT
+  USING (
+    status = 'completed' AND
+    public.is_scoring_publicly_visible(project_scoring.snapshot_id)
+  );
+COMMENT ON POLICY "Public scoring is viewable by everyone" ON public.project_scoring IS 'Allows anyone to view completed scoring for public project snapshots.';
+
+DROP POLICY IF EXISTS "Users with permissions can view project scoring" ON public.project_scoring;
+CREATE POLICY "Users with permissions can view project scoring" ON public.project_scoring
+  FOR SELECT USING (
+    public.user_has_scoring_access(project_scoring.snapshot_id, auth.uid())
+  );
+COMMENT ON POLICY "Users with permissions can view project scoring" ON public.project_scoring IS 'Allows users with project permissions to view scoring for any status.';
+
+DROP POLICY IF EXISTS "System can create scoring" ON public.project_scoring;
+CREATE POLICY "System can create scoring" ON public.project_scoring
+  FOR INSERT WITH CHECK (
+    -- Allow creation for authenticated users who have project permissions
+    auth.uid() IS NOT NULL AND
+    public.user_has_scoring_access(project_scoring.snapshot_id, auth.uid()) AND
+    EXISTS (
+      SELECT 1 FROM public.snapshots s
+      JOIN public.project_permissions pp ON pp.project_id = s.project_id
+      WHERE s.id = project_scoring.snapshot_id
+        AND pp.user_id = auth.uid()
+        AND pp.role IN ('admin', 'owner')
+    )
+  );
+COMMENT ON POLICY "System can create scoring" ON public.project_scoring IS 'Allows project admins and owners to create scoring records.';
+
+DROP POLICY IF EXISTS "System can update scoring" ON public.project_scoring;
+CREATE POLICY "System can update scoring" ON public.project_scoring
+  FOR UPDATE USING (
+    -- Allow updates for authenticated users who have project admin/owner permissions
+    auth.uid() IS NOT NULL AND
+    EXISTS (
+      SELECT 1 FROM public.snapshots s
+      JOIN public.project_permissions pp ON pp.project_id = s.project_id
+      WHERE s.id = project_scoring.snapshot_id
+        AND pp.user_id = auth.uid()
+        AND pp.role IN ('admin', 'owner')
+    )
+  )
+  WITH CHECK (
+    -- Ensure the same conditions apply for the updated data
+    auth.uid() IS NOT NULL AND
+    EXISTS (
+      SELECT 1 FROM public.snapshots s
+      JOIN public.project_permissions pp ON pp.project_id = s.project_id
+      WHERE s.id = project_scoring.snapshot_id
+        AND pp.user_id = auth.uid()
+        AND pp.role IN ('admin', 'owner')
+    )
+  );
+COMMENT ON POLICY "System can update scoring" ON public.project_scoring IS 'Allows project admins and owners to update scoring records.';
+
+DROP POLICY IF EXISTS "Only project owners can delete scoring" ON public.project_scoring;
+CREATE POLICY "Only project owners can delete scoring" ON public.project_scoring
+  FOR DELETE USING (
+    auth.uid() IS NOT NULL AND
+    EXISTS (
+      SELECT 1 FROM public.snapshots s
+      JOIN public.project_permissions pp ON pp.project_id = s.project_id
+      WHERE s.id = project_scoring.snapshot_id
+        AND pp.user_id = auth.uid()
+        AND pp.role = 'owner'
+    )
+  );
+COMMENT ON POLICY "Only project owners can delete scoring" ON public.project_scoring IS 'Restricts scoring deletion to only project owners.';
+
+-- Function to get scoring by project (bypasses RLS)
+CREATE OR REPLACE FUNCTION public.get_project_scoring(p_project_id UUID)
+RETURNS TABLE (
+  id UUID,
+  created_at TIMESTAMP WITH TIME ZONE,
+  updated_at TIMESTAMP WITH TIME ZONE,
+  snapshot_id UUID,
+  status scoring_status_enum,
+  investment_rating NUMERIC,
+  market_potential NUMERIC,
+  team_competency NUMERIC,
+  tech_innovation NUMERIC,
+  business_model NUMERIC,
+  execution_risk NUMERIC,
+  summary TEXT,
+  research TEXT,
+  score NUMERIC,
+  ai_model_version TEXT,
+  snapshot_version INTEGER
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    ps.id,
+    ps.created_at,
+    ps.updated_at,
+    ps.snapshot_id,
+    ps.status,
+    ps.investment_rating,
+    ps.market_potential,
+    ps.team_competency,
+    ps.tech_innovation,
+    ps.business_model,
+    ps.execution_risk,
+    ps.summary,
+    ps.research,
+    ps.score,
+    ps.ai_model_version,
+    s.version as snapshot_version
+  FROM public.project_scoring ps
+  JOIN public.snapshots s ON s.id = ps.snapshot_id
+  WHERE s.project_id = p_project_id
+  ORDER BY ps.created_at DESC;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.get_project_scoring(UUID) TO anon, authenticated;
+COMMENT ON FUNCTION public.get_project_scoring(UUID) IS 'Gets all scoring records for a project, ordered by creation date. Bypasses RLS but respects visibility in application layer.';
+
+-- Function to create or update scoring (bypasses RLS for system operations)
+CREATE OR REPLACE FUNCTION public.upsert_project_scoring(
+  p_snapshot_id UUID,
+  p_status scoring_status_enum,
+  p_investment_rating NUMERIC DEFAULT NULL,
+  p_market_potential NUMERIC DEFAULT NULL,
+  p_team_competency NUMERIC DEFAULT NULL,
+  p_tech_innovation NUMERIC DEFAULT NULL,
+  p_business_model NUMERIC DEFAULT NULL,
+  p_execution_risk NUMERIC DEFAULT NULL,
+  p_summary TEXT DEFAULT NULL,
+  p_research TEXT DEFAULT NULL,
+  p_score NUMERIC DEFAULT NULL,
+  p_ai_model_version TEXT DEFAULT 'unknown'
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_scoring_id UUID;
+  v_user_id UUID;
+BEGIN
+  v_user_id := auth.uid();
+  
+  -- Check if user has permissions (admin or owner)
+  IF NOT EXISTS (
+    SELECT 1 FROM public.snapshots s
+    JOIN public.project_permissions pp ON pp.project_id = s.project_id
+    WHERE s.id = p_snapshot_id
+      AND pp.user_id = v_user_id
+      AND pp.role IN ('admin', 'owner')
+  ) THEN
+    RAISE EXCEPTION 'Insufficient permissions to create/update scoring';
+  END IF;
+  
+  -- Insert or update scoring
+  INSERT INTO public.project_scoring (
+    snapshot_id,
+    status,
+    investment_rating,
+    market_potential,
+    team_competency,
+    tech_innovation,
+    business_model,
+    execution_risk,
+    summary,
+    research,
+    score,
+    ai_model_version
+  )
+  VALUES (
+    p_snapshot_id,
+    p_status,
+    p_investment_rating,
+    p_market_potential,
+    p_team_competency,
+    p_tech_innovation,
+    p_business_model,
+    p_execution_risk,
+    p_summary,
+    p_research,
+    p_score,
+    p_ai_model_version
+  )
+  ON CONFLICT (snapshot_id) DO UPDATE SET
+    status = EXCLUDED.status,
+    investment_rating = EXCLUDED.investment_rating,
+    market_potential = EXCLUDED.market_potential,
+    team_competency = EXCLUDED.team_competency,
+    tech_innovation = EXCLUDED.tech_innovation,
+    business_model = EXCLUDED.business_model,
+    execution_risk = EXCLUDED.execution_risk,
+    summary = EXCLUDED.summary,
+    research = EXCLUDED.research,
+    score = EXCLUDED.score,
+    ai_model_version = EXCLUDED.ai_model_version,
+    updated_at = NOW()
+  RETURNING id INTO v_scoring_id;
+  
+  RETURN v_scoring_id;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.upsert_project_scoring(UUID, scoring_status_enum, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TEXT, TEXT, NUMERIC, TEXT) TO authenticated;
+COMMENT ON FUNCTION public.upsert_project_scoring(UUID, scoring_status_enum, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TEXT, TEXT, NUMERIC, TEXT) IS 'Creates or updates project scoring with proper permission checks. Used by API endpoints and AI scoring processes.';
+
+-- Function to get leaderboard data (bypasses RLS)
+CREATE OR REPLACE FUNCTION public.get_scoring_leaderboard(
+  p_limit INTEGER DEFAULT 50,
+  p_offset INTEGER DEFAULT 0,
+  p_min_score NUMERIC DEFAULT NULL
+)
+RETURNS TABLE (
+  project_id UUID,
+  project_slug TEXT,
+  project_name TEXT,
+  project_slogan TEXT,
+  project_status project_status_enum,
+  score NUMERIC,
+  investment_rating NUMERIC,
+  market_potential NUMERIC,
+  team_competency NUMERIC,
+  tech_innovation NUMERIC,
+  business_model NUMERIC,
+  execution_risk NUMERIC,
+  scoring_created_at TIMESTAMP WITH TIME ZONE,
+  snapshot_version INTEGER
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    p.id as project_id,
+    p.slug as project_slug,
+    s.name as project_name,
+    s.slogan as project_slogan,
+    s.status as project_status,
+    ps.score,
+    ps.investment_rating,
+    ps.market_potential,
+    ps.team_competency,
+    ps.tech_innovation,
+    ps.business_model,
+    ps.execution_risk,
+    ps.created_at as scoring_created_at,
+    s.version as snapshot_version
+  FROM public.projects p
+  JOIN public.snapshots s ON s.id = p.public_snapshot_id
+  JOIN public.project_scoring ps ON ps.snapshot_id = s.id
+  WHERE p.is_public = true 
+    AND p.is_archived = false
+    AND ps.status = 'completed'
+    AND ps.score IS NOT NULL
+    AND (p_min_score IS NULL OR ps.score >= p_min_score)
+  ORDER BY ps.score DESC, ps.created_at DESC
+  LIMIT p_limit OFFSET p_offset;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.get_scoring_leaderboard(INTEGER, INTEGER, NUMERIC) TO anon, authenticated;
+COMMENT ON FUNCTION public.get_scoring_leaderboard(INTEGER, INTEGER, NUMERIC) IS 'Gets leaderboard data for public projects with completed scoring, ordered by score. Bypasses RLS for public data.';
+
+-- ==========================================
+-- Foreign Key Constraints (added after all tables are created)
+-- ==========================================
+
+-- Add foreign key constraint for snapshots.scoring_id to project_scoring table
+-- (This constraint is added after project_scoring table is created to avoid circular dependencies)
+ALTER TABLE public.snapshots DROP CONSTRAINT IF EXISTS fk_snapshots_scoring_id;
+ALTER TABLE public.snapshots ADD CONSTRAINT fk_snapshots_scoring_id
+  FOREIGN KEY (scoring_id) REFERENCES public.project_scoring(id) ON DELETE SET NULL;

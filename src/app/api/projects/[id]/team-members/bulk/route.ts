@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { checkUserProjectRole } from '@/lib/supabase/helpers';
 import { createSupabaseServerClient } from '@/lib/supabase/client';
 import { bulkTeamMemberSchema } from '@/lib/validations/team';
-import { z } from 'zod';
+import { syncSnapshotData } from '@/lib/utils/snapshot-sync';
 
 interface RouteContext {
   params: Promise<{
@@ -153,6 +154,9 @@ export async function POST(request: Request, { params }: RouteContext) {
       console.error('Error performing bulk operation:', error);
       return NextResponse.json({ error: 'Failed to perform bulk operation' }, { status: 500 });
     }
+
+    // Sync snapshot contents and team members to keep data up to date
+    await syncSnapshotData(projectId);
 
     return NextResponse.json({
       success: true,

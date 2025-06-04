@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -103,6 +102,25 @@ export function FundingSection({ initialData, onSave, isLoading = false }: Fundi
             <Flex direction="column" gap="5">
               {/* Funding Goal and Currency */}
               <Box>
+                <Box
+                  style={{
+                    padding: '16px',
+                    backgroundColor: 'var(--red-2)',
+                    borderRadius: 'var(--radius-3)',
+                    border: '1px solid var(--red-6)',
+                  }}
+                  mb="6"
+                >
+                  <Text
+                    size="2"
+                    color="red"
+                    weight="medium"
+                    style={{ display: 'block', textAlign: 'center' }}
+                  >
+                    🚧 This section is not yet implemented! 🚧
+                  </Text>
+                </Box>
+
                 <Text size="3" weight="medium" mb="3" style={{ display: 'block' }}>
                   Funding Information
                 </Text>

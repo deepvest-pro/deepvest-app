@@ -72,6 +72,9 @@ export type ProjectRole = 'viewer' | 'editor' | 'admin' | 'owner';
 
 export type MilestoneStatus = 'planned' | 'in_progress' | 'completed' | 'delayed' | 'cancelled';
 
+// Project scoring status enum
+export type ScoringStatus = 'new' | 'in_progress' | 'completed' | 'failed';
+
 // Project fields without common fields
 type ProjectFields = {
   slug: string;
@@ -110,6 +113,7 @@ type SnapshotFields = {
   video_urls: string[] | null;
   contents: UUID[] | null;
   team_members: UUID[] | null;
+  scoring_id: UUID | null;
   author_id: UUID | ExpandedUser;
   is_locked: boolean;
 };
@@ -343,6 +347,42 @@ export type TeamMemberWithUser = TeamMember & {
   user?: UserProfile | null;
 };
 
+// Project scoring fields without common fields
+type ProjectScoringFields = {
+  snapshot_id: UUID;
+  status: ScoringStatus;
+  investment_rating: number | null;
+  market_potential: number | null;
+  team_competency: number | null;
+  tech_innovation: number | null;
+  business_model: number | null;
+  execution_risk: number | null;
+  summary: string | null;
+  research: string | null;
+  score: number | null;
+  ai_model_version: string;
+};
+
+// Define project scoring row type
+export type ProjectScoringRow = CommonTableFields & ProjectScoringFields;
+
+// Export project scoring type for backward compatibility
+export type ProjectScoring = ProjectScoringRow;
+
+// Define project scoring insert type
+type ProjectScoringInsert = Partial<Omit<CommonTableFields, 'id'>> &
+  Pick<ProjectScoringFields, 'snapshot_id' | 'ai_model_version'> &
+  Partial<Omit<ProjectScoringFields, 'snapshot_id' | 'ai_model_version'>>;
+
+// Define project scoring update type
+type ProjectScoringUpdate = Partial<ProjectScoringRow>;
+
+// Project scoring with snapshot information
+export type ProjectScoringWithSnapshot = ProjectScoring & {
+  snapshot?: Snapshot | null;
+  project?: Project | null;
+};
+
 // Database interface using the reusable types
 export interface Database {
   public: {
@@ -365,6 +405,13 @@ export interface Database {
 
       // Team Members
       team_members: TableDefinition<TeamMemberRow, TeamMemberInsert, TeamMemberUpdate>;
+
+      // Project Scoring
+      project_scoring: TableDefinition<
+        ProjectScoringRow,
+        ProjectScoringInsert,
+        ProjectScoringUpdate
+      >;
     };
     Views: {
       [_ in never]: never;
@@ -385,11 +432,75 @@ export interface Database {
         };
         Returns: boolean;
       };
+      get_project_scoring: {
+        Args: {
+          p_project_id: UUID;
+        };
+        Returns: Array<{
+          id: UUID;
+          created_at: string;
+          updated_at: string;
+          snapshot_id: UUID;
+          status: ScoringStatus;
+          investment_rating: number | null;
+          market_potential: number | null;
+          team_competency: number | null;
+          tech_innovation: number | null;
+          business_model: number | null;
+          execution_risk: number | null;
+          summary: string | null;
+          research: string | null;
+          score: number | null;
+          ai_model_version: string;
+          snapshot_version: number;
+        }>;
+      };
+      upsert_project_scoring: {
+        Args: {
+          p_snapshot_id: UUID;
+          p_status: ScoringStatus;
+          p_investment_rating?: number;
+          p_market_potential?: number;
+          p_team_competency?: number;
+          p_tech_innovation?: number;
+          p_business_model?: number;
+          p_execution_risk?: number;
+          p_summary?: string;
+          p_research?: string;
+          p_score?: number;
+          p_ai_model_version?: string;
+        };
+        Returns: UUID;
+      };
+      get_scoring_leaderboard: {
+        Args: {
+          p_limit?: number;
+          p_offset?: number;
+          p_min_score?: number;
+        };
+        Returns: Array<{
+          project_id: UUID;
+          project_slug: string;
+          project_name: string;
+          project_slogan: string | null;
+          project_status: ProjectStatus;
+          score: number;
+          investment_rating: number | null;
+          market_potential: number | null;
+          team_competency: number | null;
+          tech_innovation: number | null;
+          business_model: number | null;
+          execution_risk: number | null;
+          scoring_created_at: string;
+          snapshot_version: number;
+        }>;
+      };
     };
     Enums: {
       project_status_enum: ProjectStatus;
       project_role_enum: ProjectRole;
       team_member_status_enum: TeamMemberStatus;
+      scoring_status_enum: ScoringStatus;
     };
   };
   storage: {
@@ -464,19 +575,28 @@ export type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
 
 // Project with related data
 export type ProjectWithSnapshot = Project & {
-  public_snapshot?: Snapshot | null;
-  new_snapshot?: Snapshot | null;
+  public_snapshot?: SnapshotWithAuthorAndScoring | null;
+  new_snapshot?: SnapshotWithAuthorAndScoring | null;
   permissions?: ProjectPermission[];
 };
 
 // Type for a snapshot that definitely has an expanded author (if author exists)
-// This replaces the older SnapshotWithAuthor which might be too simple
+// This is used when we know the author has been fetched and expanded
 export type SnapshotWithExpandedAuthor = Omit<Snapshot, 'author_id'> & {
-  author_id: ExpandedUser | null; // Author is expanded or null if no author_id was set
+  author_id: ExpandedUser | UUID; // Can be either expanded or still UUID
 };
 
-// Older SnapshotWithAuthor - can be deprecated or updated if still used elsewhere
-// For now, let's keep it but be aware of SnapshotWithExpandedAuthor as the more precise type
+// Type for a snapshot with optional scoring data
+export type SnapshotWithScoring = Snapshot & {
+  scoring?: ProjectScoring | null;
+};
+
+// Type for a snapshot with both expanded author and optional scoring
+export type SnapshotWithAuthorAndScoring = Omit<Snapshot, 'author_id'> & {
+  author_id: ExpandedUser | UUID;
+  scoring?: ProjectScoring | null;
+};
+
 export type SnapshotWithAuthor = Snapshot & {
-  author?: UserProfile | null;
+  author: ExpandedUser;
 };

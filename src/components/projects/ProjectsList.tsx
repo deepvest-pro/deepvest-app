@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { PlusIcon, GlobeIcon } from '@radix-ui/react-icons';
 import { Heading, Container, Text, Box, Button, Flex, Card, Avatar, Badge } from '@radix-ui/themes';
 import type { ProjectWithSnapshot } from '@/types/supabase';
+import { StatusBadge } from '../ui/StatusBadge';
 
 interface ProjectsListProps {
   isAuthenticated: boolean;
@@ -82,6 +83,14 @@ export function ProjectsList({ isAuthenticated }: ProjectsListProps) {
                     </Link>
                   </Heading>
                   <Flex align="center" gap="2" mb="1" wrap="wrap">
+                    <StatusBadge
+                      status={projectStatus}
+                      type="project"
+                      size="2"
+                      variant="soft"
+                      showIcon={true}
+                    />
+
                     {projectCountry && projectCity && (
                       <Badge variant="soft" size="1" radius="full">
                         <Flex gap="1" align="center">
