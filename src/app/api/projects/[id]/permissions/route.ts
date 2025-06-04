@@ -1,179 +1,97 @@
-import { NextResponse } from 'next/server';
-import {
-  addUserToProject,
-  checkUserProjectRole,
-  removeUserFromProject,
-  updateUserRole,
-} from '@/lib/supabase/helpers';
-import { createSupabaseServerClient } from '@/lib/supabase/client';
-import { permissionSchema } from '@/lib/validations/project';
+import { NextRequest } from 'next/server';
 import { z } from 'zod';
-
-interface RouteContext {
-  params: Promise<{
-    id: string;
-  }>;
-}
+import { createAPIHandlerWithParams } from '@/lib/api/base-handler';
+import { APIError, requireAuth, requireProjectPermission } from '@/lib/api/middleware/auth';
+import { ValidationSchemas } from '@/lib/validations';
+import { addUserToProject, removeUserFromProject, updateUserRole } from '@/lib/supabase/helpers';
 
 /**
  * POST /api/projects/[id]/permissions
  * Add a user to the project with a specific role
  */
-export async function POST(request: Request, { params }: RouteContext) {
-  const supabase = await createSupabaseServerClient();
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { id: projectId } = await params;
+export const POST = createAPIHandlerWithParams(async (request: NextRequest, params) => {
+  const user = await requireAuth();
+  const { id: projectId } = params;
 
   // Check if user has admin permission for this project
-  const hasAccess = await checkUserProjectRole(user.id, projectId, 'admin');
+  await requireProjectPermission(user.id, projectId, 'admin');
 
-  if (!hasAccess) {
-    return NextResponse.json(
-      { error: 'You do not have permission to manage users for this project' },
-      { status: 403 },
-    );
+  // Validate request body
+  const body = await request.json();
+  const validatedData = ValidationSchemas.project.permission.parse(body);
+
+  // Add the user to the project
+  const { success, error } = await addUserToProject(
+    projectId,
+    validatedData.email,
+    validatedData.role,
+  );
+
+  if (!success) {
+    throw new APIError(error || 'Failed to add user to project', 500);
   }
 
-  try {
-    const json = await request.json();
-
-    // Validate the request body
-    const { email, role } = permissionSchema.parse(json);
-
-    // Add the user to the project
-    const { success, error } = await addUserToProject(projectId, email, role);
-
-    if (!success) {
-      return NextResponse.json(
-        { error: error || 'Failed to add user to project' },
-        { status: 500 },
-      );
-    }
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors }, { status: 400 });
-    }
-
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  return { success: true };
+});
 
 /**
  * PUT /api/projects/[id]/permissions
  * Update user's role in the project
  */
-export async function PUT(request: Request, { params }: RouteContext) {
-  const supabase = await createSupabaseServerClient();
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { id: projectId } = await params;
+export const PUT = createAPIHandlerWithParams(async (request: NextRequest, params) => {
+  const user = await requireAuth();
+  const { id: projectId } = params;
 
   // Check if user has admin permission for this project
-  const hasAccess = await checkUserProjectRole(user.id, projectId, 'admin');
+  await requireProjectPermission(user.id, projectId, 'admin');
 
-  if (!hasAccess) {
-    return NextResponse.json(
-      { error: 'You do not have permission to manage users for this project' },
-      { status: 403 },
-    );
+  // Validate request body
+  const body = await request.json();
+  const updateSchema = z.object({
+    userId: z.string().uuid(),
+    role: z.enum(['viewer', 'editor', 'admin', 'owner']),
+  });
+  const validatedData = updateSchema.parse(body);
+
+  // Update the user's role
+  const { success, error } = await updateUserRole(
+    projectId,
+    validatedData.userId,
+    validatedData.role,
+  );
+
+  if (!success) {
+    throw new APIError(error || 'Failed to update user role', 500);
   }
 
-  try {
-    const json = await request.json();
-
-    // For update, we need the user ID instead of email
-    const updateSchema = z.object({
-      userId: z.string().uuid(),
-      role: z.enum(['viewer', 'editor', 'admin', 'owner']),
-    });
-
-    // Validate the request body
-    const { userId, role } = updateSchema.parse(json);
-
-    // Update the user's role
-    const { success, error } = await updateUserRole(projectId, userId, role);
-
-    if (!success) {
-      return NextResponse.json({ error: error || 'Failed to update user role' }, { status: 500 });
-    }
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors }, { status: 400 });
-    }
-
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  return { success: true };
+});
 
 /**
  * DELETE /api/projects/[id]/permissions
  * Remove a user from the project
  */
-export async function DELETE(request: Request, { params }: RouteContext) {
-  const supabase = await createSupabaseServerClient();
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { id: projectId } = await params;
+export const DELETE = createAPIHandlerWithParams(async (request: NextRequest, params) => {
+  const user = await requireAuth();
+  const { id: projectId } = params;
 
   // Check if user has admin permission for this project
-  const hasAccess = await checkUserProjectRole(user.id, projectId, 'admin');
+  await requireProjectPermission(user.id, projectId, 'admin');
 
-  if (!hasAccess) {
-    return NextResponse.json(
-      { error: 'You do not have permission to manage users for this project' },
-      { status: 403 },
-    );
+  // Get userId from query parameters
+  const url = new URL(request.url);
+  const userId = url.searchParams.get('userId');
+
+  if (!userId) {
+    throw new APIError('User ID is required', 400);
   }
 
-  try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
+  // Remove the user from the project
+  const { success, error } = await removeUserFromProject(projectId, userId);
 
-    if (!userId) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
-    }
-
-    // Remove the user from the project
-    const { success, error } = await removeUserFromProject(projectId, userId);
-
-    if (!success) {
-      return NextResponse.json(
-        { error: error || 'Failed to remove user from project' },
-        { status: 500 },
-      );
-    }
-
-    return NextResponse.json({ success: true });
-  } catch {
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  if (!success) {
+    throw new APIError(error || 'Failed to remove user from project', 500);
   }
-}
+
+  return { success: true };
+});

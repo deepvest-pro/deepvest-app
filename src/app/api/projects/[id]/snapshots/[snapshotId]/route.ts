@@ -1,41 +1,22 @@
-import { NextResponse } from 'next/server';
-import { checkUserProjectRole } from '@/lib/supabase/helpers';
-import { createSupabaseServerClient } from '@/lib/supabase/client';
-
-interface RouteContext {
-  params: Promise<{
-    id: string;
-    snapshotId: string;
-  }>;
-}
+import { NextRequest } from 'next/server';
+import { createAPIHandlerWithParams } from '@/lib/api/base-handler';
+import { requireAuth, requireProjectPermission, APIError } from '@/lib/api/middleware/auth';
+import { ValidationSchemas } from '@/lib/validations';
+import { SupabaseClientFactory } from '@/lib/supabase/client-factory';
 
 /**
  * GET /api/projects/[id]/snapshots/[snapshotId]
  * Get a specific snapshot
  */
-export async function GET(request: Request, { params }: RouteContext) {
-  const supabase = await createSupabaseServerClient();
+export const GET = createAPIHandlerWithParams(async (request: NextRequest, params) => {
+  const user = await requireAuth();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { id: projectId, snapshotId } = await params;
+  const { id: projectId, snapshotId } = params;
 
   // Check if user has at least viewer permission for this project
-  const hasAccess = await checkUserProjectRole(user.id, projectId, 'viewer');
+  await requireProjectPermission(user.id, projectId, 'viewer');
 
-  if (!hasAccess) {
-    return NextResponse.json(
-      { error: 'You do not have permission to view this project' },
-      { status: 403 },
-    );
-  }
+  const supabase = await SupabaseClientFactory.getServerClient();
 
   // Get the specific snapshot (raw data first)
   const { data: rawSnapshot, error } = await supabase
@@ -46,10 +27,11 @@ export async function GET(request: Request, { params }: RouteContext) {
     .single();
 
   if (error) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: error.code === 'PGRST116' ? 404 : 500 },
-    );
+    if (error.code === 'PGRST116') {
+      throw new APIError('Snapshot not found', 404);
+    }
+    console.error('Error fetching snapshot:', error);
+    throw new Error('Failed to fetch snapshot');
   }
 
   // Fetch author profile separately to avoid schema cache issues
@@ -75,36 +57,23 @@ export async function GET(request: Request, { params }: RouteContext) {
     author_id: authorProfile || rawSnapshot.author_id,
   };
 
-  return NextResponse.json({ snapshot: snapshotWithAuthor });
-}
+  return { snapshot: snapshotWithAuthor };
+});
 
 /**
  * PUT /api/projects/[id]/snapshots/[snapshotId]
  * Update a specific snapshot (if not locked)
  */
-export async function PUT(request: Request, { params }: RouteContext) {
-  const supabase = await createSupabaseServerClient();
+export const PUT = createAPIHandlerWithParams(async (request: NextRequest, params) => {
+  // Require authentication
+  const user = await requireAuth();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { id: projectId, snapshotId } = await params;
+  const { id: projectId, snapshotId } = params;
 
   // Check if user has at least editor permission for this project
-  const hasAccess = await checkUserProjectRole(user.id, projectId, 'editor');
+  await requireProjectPermission(user.id, projectId, 'editor');
 
-  if (!hasAccess) {
-    return NextResponse.json(
-      { error: 'You do not have permission to edit this project' },
-      { status: 403 },
-    );
-  }
+  const supabase = await SupabaseClientFactory.getServerClient();
 
   // Check if snapshot is locked
   const { data: snapshot, error: snapshotError } = await supabase
@@ -115,35 +84,34 @@ export async function PUT(request: Request, { params }: RouteContext) {
     .single();
 
   if (snapshotError) {
-    return NextResponse.json(
-      { error: snapshotError.message },
-      { status: snapshotError.code === 'PGRST116' ? 404 : 500 },
-    );
+    if (snapshotError.code === 'PGRST116') {
+      throw new APIError('Snapshot not found', 404);
+    }
+    console.error('Error fetching snapshot:', snapshotError);
+    throw new Error('Failed to fetch snapshot');
   }
 
   if (snapshot.is_locked) {
-    return NextResponse.json({ error: 'Cannot update a locked snapshot' }, { status: 403 });
+    throw new APIError('Cannot update a locked snapshot', 403);
   }
+
+  const body = await request.json();
+
+  const validatedData = ValidationSchemas.project.snapshot.partial().parse(body);
 
   // Update the snapshot
-  try {
-    const json = await request.json();
+  const { data: updatedSnapshot, error: updateError } = await supabase
+    .from('snapshots')
+    .update(validatedData)
+    .eq('id', snapshotId)
+    .eq('project_id', projectId)
+    .select()
+    .single();
 
-    // Only update fields that are in the request body
-    const { data: updatedSnapshot, error: updateError } = await supabase
-      .from('snapshots')
-      .update(json)
-      .eq('id', snapshotId)
-      .eq('project_id', projectId)
-      .select()
-      .single();
-
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ snapshot: updatedSnapshot });
-  } catch {
-    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+  if (updateError) {
+    console.error('Error updating snapshot:', updateError);
+    throw new Error('Failed to update snapshot');
   }
-}
+
+  return { snapshot: updatedSnapshot };
+});

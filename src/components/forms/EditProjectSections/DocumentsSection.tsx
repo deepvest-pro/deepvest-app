@@ -3,12 +3,19 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Box, Card, Flex, Text, Heading, Button } from '@radix-ui/themes';
 import { FileTextIcon, PlusIcon } from '@radix-ui/react-icons';
-import { ProjectContentWithAuthor } from '@/types/supabase';
+import type { ProjectDocumentWithAuthor } from '@/lib/supabase/repositories/project-documents';
 import { TranscribeRequest, TranscribeResponse } from '@/types/transcribe';
 import { getPrompt } from '@/lib/prompts';
 import { useToastHelpers } from '@/components/layout/ToastProvider';
 import { DocumentsList } from '@/components/forms/DocumentsList';
 import { DocumentForm } from '@/components/forms/DocumentForm';
+import { useUploadMutation, useApiMutation } from '@/hooks';
+import {
+  getProjectDocuments,
+  createProjectDocument,
+  updateProjectDocument,
+  deleteProjectDocument,
+} from '@/lib/actions/documents';
 
 interface DocumentsSectionProps {
   projectId: string;
@@ -20,16 +27,15 @@ interface DocumentFormData {
   title: string;
   slug: string;
   content_type: string;
-  content?: string;
+  description?: string;
   is_public: boolean;
 }
 
 export function DocumentsSection({ projectId }: DocumentsSectionProps) {
-  const [documents, setDocuments] = useState<ProjectContentWithAuthor[]>([]);
+  const [documents, setDocuments] = useState<ProjectDocumentWithAuthor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [editingDocument, setEditingDocument] = useState<ProjectContentWithAuthor | null>(null);
+  const [editingDocument, setEditingDocument] = useState<ProjectDocumentWithAuthor | null>(null);
   const [canEdit, setCanEdit] = useState(false);
   const [transcribingDocuments, setTranscribingDocuments] = useState<Set<string>>(new Set());
 
@@ -37,24 +43,36 @@ export function DocumentsSection({ projectId }: DocumentsSectionProps) {
   const showErrorToastRef = useRef(showErrorToast);
   showErrorToastRef.current = showErrorToast;
 
-  // Load documents on component mount
+  // Mutations using new hooks
+  const uploadMutation = useUploadMutation<{ fileUrl?: string; url?: string }>(
+    `/projects/${projectId}/upload`,
+    {
+      onError: error => showErrorToast(`Upload failed: ${error}`),
+    },
+  );
+
+  const transcribeMutation = useApiMutation<TranscribeResponse, TranscribeRequest>(
+    '/transcribe',
+    'POST',
+    {
+      onError: error => showErrorToast(`Transcription failed: ${error}`),
+    },
+  );
+
+  // Load documents on component mount using Server Action
   const loadDocuments = useCallback(async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/projects/${projectId}/documents`);
 
-      if (!response.ok) {
-        throw new Error('Failed to load documents');
+      const { documents: loadedDocuments, error } = await getProjectDocuments(projectId);
+
+      if (error) {
+        throw new Error(error);
       }
 
-      const data = await response.json();
-      setDocuments(data.documents || []);
-
-      // Check if user can edit (this would normally come from project permissions)
-      // For now, we'll assume they can edit if the API call succeeds
+      setDocuments(loadedDocuments || []);
       setCanEdit(true);
-    } catch (error) {
-      console.error('Error loading documents:', error);
+    } catch {
       showErrorToastRef.current('Failed to load documents');
     } finally {
       setIsLoading(false);
@@ -67,67 +85,43 @@ export function DocumentsSection({ projectId }: DocumentsSectionProps) {
 
   const handleCreateDocument = async (formData: DocumentFormData, files: File[]) => {
     try {
-      setIsSubmitting(true);
-
-      // First, upload the files
       const uploadPromises = files.map(async file => {
         const formDataUpload = new FormData();
         formDataUpload.append('file', file);
         formDataUpload.append('uploadType', 'document');
 
-        const uploadResponse = await fetch(`/api/projects/${projectId}/upload`, {
-          method: 'POST',
-          body: formDataUpload,
-        });
-
-        if (!uploadResponse.ok) {
-          throw new Error(`Failed to upload ${file.name}`);
-        }
-
-        const uploadData = await uploadResponse.json();
-        // Use fileUrl instead of url, and ensure it's not null
-        return uploadData.fileUrl || uploadData.url;
+        return uploadMutation.mutateAsync(formDataUpload);
       });
 
-      const fileUrls = await Promise.all(uploadPromises);
-
-      // Filter out any null/undefined URLs
-      const validFileUrls = fileUrls.filter(url => url != null);
+      const uploadResults = await Promise.all(uploadPromises);
+      const validFileUrls = uploadResults
+        .map(result => result.fileUrl || result.url)
+        .filter(url => url != null);
 
       if (validFileUrls.length === 0) {
         throw new Error('No valid file URLs received from upload');
       }
 
-      // Then create the document record
       const documentData = {
         ...formData,
         file_urls: validFileUrls,
       };
 
-      const response = await fetch(`/api/projects/${projectId}/documents`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(documentData),
-      });
+      const { document, error } = await createProjectDocument(projectId, documentData);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create document');
+      if (error) {
+        throw new Error(error);
       }
 
-      const data = await response.json();
-      setDocuments(prev => [data.document, ...prev]);
+      if (document) {
+        setDocuments(prev => [document, ...prev]);
+      }
       setViewMode('list');
       showSuccessToast('Document created successfully');
     } catch (error: unknown) {
-      console.error('Error creating document:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to create document';
       showErrorToast(errorMessage);
-      throw error; // Re-throw to handle in form
-    } finally {
-      setIsSubmitting(false);
+      throw error;
     }
   };
 
@@ -135,78 +129,64 @@ export function DocumentsSection({ projectId }: DocumentsSectionProps) {
     if (!editingDocument) return;
 
     try {
-      setIsSubmitting(true);
+      const { document, error } = await updateProjectDocument(
+        projectId,
+        editingDocument.id,
+        formData,
+      );
 
-      const response = await fetch(`/api/projects/${projectId}/documents/${editingDocument.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update document');
+      if (error) {
+        throw new Error(error);
       }
 
-      const data = await response.json();
-      setDocuments(prev => prev.map(doc => (doc.id === editingDocument.id ? data.document : doc)));
+      if (document) {
+        setDocuments(prev => prev.map(doc => (doc.id === editingDocument.id ? document : doc)));
+      }
       setViewMode('list');
       setEditingDocument(null);
       showSuccessToast('Document updated successfully');
     } catch (error: unknown) {
-      console.error('Error updating document:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to update document';
       showErrorToast(errorMessage);
-      throw error; // Re-throw to handle in form
-    } finally {
-      setIsSubmitting(false);
+      throw error;
     }
   };
 
   const handleDeleteDocument = async (documentId: string) => {
     try {
-      const response = await fetch(`/api/projects/${projectId}/documents/${documentId}`, {
-        method: 'DELETE',
-      });
+      const { success, error } = await deleteProjectDocument(projectId, documentId);
 
-      if (!response.ok) {
-        throw new Error('Failed to delete document');
+      if (!success || error) {
+        throw new Error(error || 'Failed to delete document');
       }
 
       setDocuments(prev => prev.filter(doc => doc.id !== documentId));
       showSuccessToast('Document deleted successfully');
-    } catch (error) {
-      console.error('Error deleting document:', error);
+    } catch {
       showErrorToast('Failed to delete document');
     }
   };
 
   const handleToggleVisibility = async (documentId: string, isPublic: boolean) => {
     try {
-      const response = await fetch(`/api/projects/${projectId}/documents/${documentId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ is_public: isPublic }),
+      const { document, error } = await updateProjectDocument(projectId, documentId, {
+        is_public: isPublic,
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to update document visibility');
+      if (error) {
+        throw new Error(error);
       }
 
-      const data = await response.json();
-      setDocuments(prev => prev.map(doc => (doc.id === documentId ? data.document : doc)));
+      if (document) {
+        setDocuments(prev => prev.map(doc => (doc.id === documentId ? document : doc)));
+      }
       showSuccessToast(`Document made ${isPublic ? 'public' : 'private'}`);
-    } catch (error) {
-      console.error('Error updating document visibility:', error);
+    } catch {
       showErrorToast('Failed to update document visibility');
     }
   };
 
-  const handleGetContent = async (document: ProjectContentWithAuthor) => {
+  const handleGetContent = async (document: ProjectDocumentWithAuthor) => {
     if (!document.file_urls.length) {
       showErrorToast('No file available for transcription');
       return;
@@ -221,45 +201,24 @@ export function DocumentsSection({ projectId }: DocumentsSectionProps) {
         prompt: getPrompt('DOCUMENT_CONTENT_EXTRACTION'),
       };
 
-      const response = await fetch('/api/transcribe', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(transcribeRequest),
-      });
+      const response = await transcribeMutation.mutateAsync(transcribeRequest);
 
-      if (!response.ok) {
-        throw new Error('Failed to transcribe document');
+      const { document: updatedDocument, error } = await updateProjectDocument(
+        projectId,
+        document.id,
+        { content: response.result },
+      );
+
+      if (error) {
+        throw new Error(error);
       }
 
-      const transcribeResponse: TranscribeResponse = await response.json();
-
-      if (!transcribeResponse.success) {
-        throw new Error(transcribeResponse.error || 'Transcription failed');
+      if (updatedDocument) {
+        setDocuments(prev => prev.map(doc => (doc.id === document.id ? updatedDocument : doc)));
       }
-
-      // Update the document with the extracted content
-      const updateResponse = await fetch(`/api/projects/${projectId}/documents/${document.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          content: transcribeResponse.result,
-        }),
-      });
-
-      if (!updateResponse.ok) {
-        throw new Error('Failed to update document with extracted content');
-      }
-
-      const updateData = await updateResponse.json();
-      setDocuments(prev => prev.map(doc => (doc.id === document.id ? updateData.document : doc)));
 
       showSuccessToast('Content extracted and saved successfully!');
     } catch (error) {
-      console.error('Error extracting content:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to extract content';
       showErrorToast(errorMessage);
     } finally {
@@ -271,7 +230,7 @@ export function DocumentsSection({ projectId }: DocumentsSectionProps) {
     }
   };
 
-  const handleEditClick = (document: ProjectContentWithAuthor) => {
+  const handleEditClick = (document: ProjectDocumentWithAuthor) => {
     setEditingDocument(document);
     setViewMode('edit');
   };
@@ -338,7 +297,7 @@ export function DocumentsSection({ projectId }: DocumentsSectionProps) {
             <DocumentForm
               onSubmit={handleCreateDocument}
               onCancel={handleCancelForm}
-              isLoading={isSubmitting}
+              isLoading={uploadMutation.isPending}
             />
           )}
 
@@ -347,7 +306,7 @@ export function DocumentsSection({ projectId }: DocumentsSectionProps) {
               document={editingDocument}
               onSubmit={formData => handleEditDocument(formData)}
               onCancel={handleCancelForm}
-              isLoading={isSubmitting}
+              isLoading={false} // Edit doesn't require uploads
             />
           )}
         </Flex>

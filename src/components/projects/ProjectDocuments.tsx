@@ -1,11 +1,11 @@
 'use client';
 
 import { Box, Heading } from '@radix-ui/themes';
-import { ProjectContentWithAuthor } from '@/types/supabase';
+import type { ProjectDocumentWithAuthor } from '@/lib/supabase/repositories/project-documents';
 import { DocumentsDisplay } from '@/components/forms/DocumentsDisplay';
 
 interface ProjectDocumentsProps {
-  documents: ProjectContentWithAuthor[];
+  documents: ProjectDocumentWithAuthor[];
 }
 
 export function ProjectDocuments({ documents }: ProjectDocumentsProps) {
@@ -35,7 +35,7 @@ export function ProjectDocuments({ documents }: ProjectDocumentsProps) {
         documents={documents}
         showActions={false}
         canEdit={false}
-        onGetContent={() => {}} // Включаем показ кнопки "Show content" для документов с контентом
+        onGetContent={() => {}} // Enable "Show content" button for documents with content
       />
     </Box>
   );

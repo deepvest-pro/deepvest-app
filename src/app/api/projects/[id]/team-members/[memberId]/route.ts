@@ -1,282 +1,200 @@
-import { NextResponse } from 'next/server';
-import { z } from 'zod';
-import { checkUserProjectRole } from '@/lib/supabase/helpers';
-import { createSupabaseServerClient } from '@/lib/supabase/client';
-import { updateTeamMemberSchema } from '@/lib/validations/team';
+import { createAPIHandlerWithParams } from '@/lib/api/base-handler';
+import {
+  requireAuth,
+  requireProjectPermission,
+  getOptionalAuth,
+  APIError,
+} from '@/lib/api/middleware/auth';
+import { ValidationSchemas } from '@/lib/validations';
+import { teamMembersRepository } from '@/lib/supabase/repositories/team-members';
 import { syncSnapshotData } from '@/lib/utils/snapshot-sync';
-
-interface RouteContext {
-  params: Promise<{
-    id: string;
-    memberId: string;
-  }>;
-}
+import { SupabaseClientFactory } from '@/lib/supabase/client-factory';
 
 /**
  * GET /api/projects/[id]/team-members/[memberId]
  * Get a specific team member
  */
-export async function GET(request: Request, { params }: RouteContext) {
-  const supabase = await createSupabaseServerClient();
+export const GET = createAPIHandlerWithParams(async (request, params) => {
+  const { id: projectId, memberId } = params;
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+  // Get the team member first
+  const { data: teamMember, error: memberError } = await teamMembersRepository.findById(memberId);
 
-  if (authError) {
-    return NextResponse.json({ error: 'Authentication error' }, { status: 500 });
+  if (memberError || !teamMember) {
+    throw new APIError('Team member not found', 404);
   }
 
-  const { id: projectId, memberId } = await params;
+  // Verify team member belongs to the project
+  if (teamMember.project_id !== projectId) {
+    throw new APIError('Team member not found', 404);
+  }
 
-  // Check if user has access to view team members
-  let hasAccess = false;
+  if (teamMember.deleted_at) {
+    throw new APIError('Team member not found', 404);
+  }
+
+  // Check access permissions based on project visibility
+  const user = await getOptionalAuth();
 
   if (user) {
-    // Authenticated user - check project permissions
-    hasAccess = await checkUserProjectRole(user.id, projectId, 'viewer');
-  }
-
-  if (!hasAccess) {
-    // Check if project is public for guest access
-    const { data: project, error: projectError } = await supabase
-      .from('projects')
-      .select('is_public, is_archived')
-      .eq('id', projectId)
-      .single();
-
-    if (projectError || !project?.is_public || project.is_archived) {
-      return NextResponse.json({ error: 'Project not found or access denied' }, { status: 404 });
+    // Authenticated user - check if they have project access
+    try {
+      await requireProjectPermission(user.id, projectId, 'viewer');
+      // User has access, return the team member
+      return { team_member: teamMember };
+    } catch {
+      // User doesn't have access, fall through to public check
     }
   }
 
-  try {
-    // Get the specific team member
-    const { data, error } = await supabase
-      .from('team_members')
-      .select(
-        `
-        *,
-        author:author_id(id, full_name, email),
-        user:user_id(id, email, user_profiles(full_name, nickname, avatar_url))
-      `,
-      )
-      .eq('id', memberId)
-      .eq('project_id', projectId)
-      .is('deleted_at', null)
-      .single();
+  // Check if project is public for guest access or users without permission
+  const supabase = await SupabaseClientFactory.getServerClient();
+  const { data: project, error: projectError } = await supabase
+    .from('projects')
+    .select('is_public, is_archived')
+    .eq('id', projectId)
+    .single();
 
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return NextResponse.json({ error: 'Team member not found' }, { status: 404 });
-      }
-      console.error('Error fetching team member:', error);
-      return NextResponse.json({ error: 'Failed to fetch team member' }, { status: 500 });
-    }
-
-    return NextResponse.json({ team_member: data });
-  } catch (error) {
-    console.error('Error in GET /api/projects/[id]/team-members/[memberId]:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  if (projectError || !project?.is_public || project.is_archived) {
+    throw new APIError('Team member not found', 404);
   }
-}
+
+  return { team_member: teamMember };
+});
 
 /**
  * PUT /api/projects/[id]/team-members/[memberId]
  * Update a specific team member
  */
-export async function PUT(request: Request, { params }: RouteContext) {
-  const supabase = await createSupabaseServerClient();
+export const PUT = createAPIHandlerWithParams(async (request, params) => {
+  const user = await requireAuth();
+  const { id: projectId, memberId } = params;
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+  // Check project permissions
+  const permission = await requireProjectPermission(user.id, projectId, 'editor');
 
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Get the team member to check ownership and existence
+  const { data: existingMember, error: memberError } =
+    await teamMembersRepository.findById(memberId);
+
+  if (memberError || !existingMember) {
+    throw new APIError('Team member not found', 404);
   }
 
-  const { id: projectId, memberId } = await params;
-
-  // Check if user has permission to manage team members
-  const hasAccess = await checkUserProjectRole(user.id, projectId, 'editor');
-
-  if (!hasAccess) {
-    return NextResponse.json(
-      { error: 'You do not have permission to manage team members for this project' },
-      { status: 403 },
-    );
+  // Verify team member belongs to the project
+  if (existingMember.project_id !== projectId) {
+    throw new APIError('Team member not found', 404);
   }
 
-  try {
-    // Get the existing team member to check ownership
-    const { data: existingMember, error: fetchError } = await supabase
-      .from('team_members')
-      .select('author_id')
-      .eq('id', memberId)
-      .eq('project_id', projectId)
-      .is('deleted_at', null)
-      .single();
+  // Check if team member is deleted
+  if (existingMember.deleted_at) {
+    throw new APIError('Team member not found', 404);
+  }
 
-    if (fetchError) {
-      if (fetchError.code === 'PGRST116') {
-        return NextResponse.json({ error: 'Team member not found' }, { status: 404 });
-      }
-      return NextResponse.json({ error: 'Failed to fetch team member' }, { status: 500 });
-    }
+  // Check if user can edit this team member (author or admin/owner)
+  const canEdit =
+    existingMember.author_id === user.id || ['admin', 'owner'].includes(permission.role);
 
-    // Check if user can edit this team member (author or admin/owner)
-    const userRole = await supabase
-      .from('project_permissions')
-      .select('role')
-      .eq('project_id', projectId)
-      .eq('user_id', user.id)
-      .single();
+  if (!canEdit) {
+    throw new APIError('Insufficient permissions to edit this team member', 403);
+  }
 
-    const canEdit =
-      existingMember.author_id === user.id ||
-      (userRole.data && ['admin', 'owner'].includes(userRole.data.role));
+  // Validate request body
+  const body = await request.json();
+  const validatedData = ValidationSchemas.team.update.parse(body);
 
-    if (!canEdit) {
-      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
-    }
-
-    const json = await request.json();
-
-    // Add the member ID to the request data
-    const updateData = {
-      ...json,
-      id: memberId,
-    };
-
-    // Validate the request body
-    const validatedData = updateTeamMemberSchema.parse(updateData);
-
-    // Check if email is already used by another team member in this project (if email is being updated)
-    if (validatedData.email) {
-      const { data: existingEmailMember } = await supabase
-        .from('team_members')
-        .select('id')
-        .eq('project_id', projectId)
-        .eq('email', validatedData.email)
-        .neq('id', memberId)
-        .is('deleted_at', null)
-        .single();
-
-      if (existingEmailMember) {
-        return NextResponse.json(
-          { error: 'A team member with this email already exists in this project' },
-          { status: 409 },
-        );
-      }
-    }
-
-    // Remove the id from the update data as it shouldn't be updated
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { id, ...updateFields } = validatedData;
-
-    // Update the team member
-    const { data, error } = await supabase
-      .from('team_members')
-      .update({
-        ...updateFields,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', memberId)
-      .eq('project_id', projectId)
-      .is('deleted_at', null)
-      .select(
-        `
-        *,
-        author:author_id(id, full_name, email),
-        user:user_id(id, email, user_profiles(full_name, nickname, avatar_url))
-      `,
-      )
-      .single();
-
-    if (error) {
-      console.error('Error updating team member:', error);
-      return NextResponse.json({ error: 'Failed to update team member' }, { status: 500 });
-    }
-
-    // Sync snapshot contents and team members to keep data up to date
-    await syncSnapshotData(projectId);
-
-    return NextResponse.json({ team_member: data });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid input data', details: error.errors },
-        { status: 400 },
+  // Check if email is already used by another team member in this project (if email is being updated)
+  if (validatedData.email && validatedData.email !== existingMember.email) {
+    const { data: isEmailAvailable, error: emailError } =
+      await teamMembersRepository.isEmailAvailableInProject(
+        projectId,
+        validatedData.email,
+        memberId,
       );
+
+    if (emailError) {
+      throw new APIError('Failed to check email availability', 500);
     }
 
-    console.error('Error in PUT /api/projects/[id]/team-members/[memberId]:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    if (!isEmailAvailable) {
+      throw new APIError('A team member with this email already exists in this project', 409);
+    }
   }
-}
+
+  // Update the team member
+  const { data: updatedMember, error: updateError } = await teamMembersRepository.update(
+    memberId,
+    validatedData,
+  );
+
+  if (updateError || !updatedMember) {
+    throw new APIError(updateError || 'Failed to update team member', 500);
+  }
+
+  // Sync snapshot contents and team members to keep data up to date
+  await syncSnapshotData(projectId);
+
+  return { team_member: updatedMember };
+});
 
 /**
  * DELETE /api/projects/[id]/team-members/[memberId]
  * Soft delete a team member
  */
-export async function DELETE(request: Request, { params }: RouteContext) {
-  const supabase = await createSupabaseServerClient();
+export const DELETE = createAPIHandlerWithParams(async (request, params) => {
+  const user = await requireAuth();
+  const { id: projectId, memberId } = params;
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+  // Check project permissions
+  const permission = await requireProjectPermission(user.id, projectId, 'editor');
 
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Get the team member to check ownership and existence
+  const { data: existingMember, error: memberError } =
+    await teamMembersRepository.findById(memberId);
+
+  if (memberError || !existingMember) {
+    throw new APIError('Team member not found', 404);
   }
 
-  const { id: projectId, memberId } = await params;
-
-  // Check if user has permission to manage team members
-  const hasAccess = await checkUserProjectRole(user.id, projectId, 'editor');
-
-  if (!hasAccess) {
-    return NextResponse.json(
-      { error: 'You do not have permission to manage team members for this project' },
-      { status: 403 },
-    );
+  // Verify team member belongs to the project
+  if (existingMember.project_id !== projectId) {
+    throw new APIError('Team member not found', 404);
   }
 
+  // Check if team member is already deleted
+  if (existingMember.deleted_at) {
+    throw new APIError('Team member not found', 404);
+  }
+
+  // Check if user can delete this team member (author or admin/owner)
+  const canDelete =
+    existingMember.author_id === user.id || ['admin', 'owner'].includes(permission.role);
+
+  if (!canDelete) {
+    throw new APIError('Insufficient permissions to delete this team member', 403);
+  }
+
+  // Soft delete the team member using the dedicated method
+  const { data: deleteSuccess, error: deleteError } =
+    await teamMembersRepository.softDelete(memberId);
+
+  if (deleteError) {
+    console.error(`Failed to soft delete team member ${memberId}:`, deleteError);
+    throw new APIError(`Failed to delete team member: ${deleteError}`, 500);
+  }
+
+  if (!deleteSuccess) {
+    console.error(`Soft delete returned false for team member ${memberId}`);
+    throw new APIError('Failed to delete team member: operation was not successful', 500);
+  }
+
+  // Sync snapshot contents and team members to keep data up to date
   try {
-    // Soft delete the team member using database function to bypass RLS
-    const { data: deleteSuccess, error } = await supabase.rpc('soft_delete_team_member', {
-      p_member_id: memberId,
-      p_project_id: projectId,
-      p_user_id: user.id,
-    });
-
-    if (error) {
-      console.error('Error calling soft_delete_team_member function:', error);
-      return NextResponse.json({ error: 'Failed to delete team member' }, { status: 500 });
-    }
-
-    if (!deleteSuccess) {
-      console.log('Soft delete returned false - team member not found or insufficient permissions');
-      return NextResponse.json(
-        {
-          error: 'Team member not found or you do not have permission to delete it',
-        },
-        { status: 404 },
-      );
-    }
-
-    console.log('Team member soft deleted successfully');
-
-    // Sync snapshot contents and team members to keep data up to date
     await syncSnapshotData(projectId);
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Error in DELETE /api/projects/[id]/team-members/[memberId]:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  } catch (syncError) {
+    console.warn(`Failed to sync snapshot data for project ${projectId}:`, syncError);
+    // Don't fail the delete operation if snapshot sync fails
   }
-}
+
+  return { success: true };
+});

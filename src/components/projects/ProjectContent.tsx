@@ -29,12 +29,8 @@ import {
   CalendarIcon,
   StarIcon,
 } from '@radix-ui/react-icons';
-import {
-  ProjectWithSnapshot,
-  ProjectRole,
-  ProjectContentWithAuthor,
-  TeamMember,
-} from '@/types/supabase';
+import { ProjectWithSnapshot, ProjectRole, TeamMember } from '@/types/supabase';
+import type { ProjectDocumentWithAuthor } from '@/lib/supabase/repositories/project-documents';
 import { toggleProjectPublication, publishDraft } from '@/app/projects/[id]/actions';
 import { useProjectData, useProjectPermissions } from '@/lib/hooks/useProjectData';
 import { getInitials } from '@/lib/utils/format';
@@ -47,7 +43,7 @@ import { ProjectScoringDetails } from './ProjectScoringDetails';
 
 interface ProjectContentProps {
   project: ProjectWithSnapshot;
-  documents: ProjectContentWithAuthor[];
+  documents: ProjectDocumentWithAuthor[];
   team: TeamMember[];
   isAuthenticated: boolean;
   userId?: string;
@@ -61,7 +57,7 @@ export function ProjectContent({
   userId,
 }: ProjectContentProps) {
   const [project, setProject] = useState<ProjectWithSnapshot>(initialProject);
-  const [documents] = useState<ProjectContentWithAuthor[]>(initialDocuments);
+  const [documents] = useState<ProjectDocumentWithAuthor[]>(initialDocuments);
   const [team] = useState<TeamMember[]>(initialTeam);
   const [isPending, startTransition] = useTransition();
   const [isScoringPending, setScoringPending] = useState(false);
@@ -101,24 +97,20 @@ export function ProjectContent({
       if (result.success) {
         toastSuccess('Project scoring generated successfully!');
 
-        // Optimistically update project state to reflect that scoring now exists
         setProject(prev => {
           const updatedProject = { ...prev };
 
-          // Update the current snapshot with scoring_id and scoring data
           if (updatedProject.public_snapshot && !updatedProject.new_snapshot_id) {
-            // No draft, update public snapshot
             updatedProject.public_snapshot = {
               ...updatedProject.public_snapshot,
-              scoring_id: result.data.id,
-              scoring: result.data,
+              scoring_id: result.data.scoring.id,
+              scoring: result.data.scoring,
             };
           } else if (updatedProject.new_snapshot) {
-            // Draft exists, update new snapshot
             updatedProject.new_snapshot = {
               ...updatedProject.new_snapshot,
-              scoring_id: result.data.id,
-              scoring: result.data,
+              scoring_id: result.data.scoring.id,
+              scoring: result.data.scoring,
             };
           }
 
@@ -127,8 +119,7 @@ export function ProjectContent({
       } else {
         toastError(result.error || 'Failed to generate project scoring.');
       }
-    } catch (error) {
-      console.error('Error generating scoring:', error);
+    } catch {
       toastError('An unexpected error occurred while generating scoring.');
     } finally {
       setScoringPending(false);

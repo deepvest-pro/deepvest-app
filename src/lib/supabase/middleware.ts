@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-// import { createMiddlewareClient as oldCreateMiddlewareClient } from '@supabase/auth-helpers-nextjs'; // Old
-import { createServerClient } from '@supabase/ssr'; // New
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import type { Database } from '@/types/supabase';
 
 /**
@@ -8,32 +7,28 @@ import type { Database } from '@/types/supabase';
  * This should be used in middleware.ts
  */
 export async function updateSession(request: NextRequest) {
-  let response = NextResponse.next({
+  const response = NextResponse.next({
     request: {
       headers: new Headers(request.headers),
     },
   });
 
+  // TODO: Change createServerClient fith modern way
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return request.cookies.getAll();
+        get(name: string) {
+          return request.cookies.get(name)?.value;
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => {
-            request.cookies.set(name, value);
-          });
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          });
-          cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options);
-          });
+        set(name: string, value: string, options: CookieOptions) {
+          request.cookies.set({ name, value, ...options });
+          response.cookies.set({ name, value, ...options });
+        },
+        remove(name: string, options: CookieOptions) {
+          request.cookies.delete(name);
+          response.cookies.delete({ name, ...options });
         },
       },
     },

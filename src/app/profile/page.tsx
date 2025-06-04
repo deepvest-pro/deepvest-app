@@ -3,6 +3,8 @@ import { getUserData } from '@/lib/react-query/auth-actions';
 import { ProtectedRoute } from '@/components/auth/protected-route';
 import { ProfileContent } from './profile-content';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'Your Profile - DeepVest',
   description: 'Manage your DeepVest profile',

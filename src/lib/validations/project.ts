@@ -1,5 +1,7 @@
 import { z } from 'zod';
+import { generateSlug } from '@/lib/utils/slug.util';
 import type { ProjectStatus } from '@/types/supabase';
+import type { RepositoryResponse } from '@/lib/supabase';
 
 // Enums for dropdown selection
 export const PROJECT_STATUSES: { value: ProjectStatus; label: string }[] = [
@@ -17,52 +19,67 @@ export const PROJECT_STATUSES: { value: ProjectStatus; label: string }[] = [
 ];
 
 /**
- * Utility for slug generation from text
+ * Generates a unique project slug by checking availability via API
+ * @param baseName - The base name to generate slug from
+ * @param excludeId - Optional project ID to exclude during availability check (for updates)
+ * @returns Promise<string> A unique slug for the project, or the base slug with a timestamp on error/max attempts.
  */
-export const generateSlug = (text: string): string => {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-};
+export async function generateUniqueProjectSlug(
+  baseName: string,
+  excludeId?: string,
+): Promise<string> {
+  const checkAvailability = async (
+    slugToCheck: string,
+    currentExcludeId?: string,
+  ): Promise<RepositoryResponse<boolean>> => {
+    try {
+      const queryParams = new URLSearchParams({ slug: slugToCheck });
+      if (currentExcludeId) {
+        queryParams.append('excludeId', currentExcludeId);
+      }
+      const response = await fetch(`/api/projects/check-slug?${queryParams.toString()}`);
 
-/**
- * Generates a unique slug by checking availability via API
- * @param baseName The base name to generate slug from
- * @returns Promise<string> A unique slug
- */
-export const generateUniqueSlug = async (baseName: string): Promise<string> => {
-  const baseSlug = generateSlug(baseName);
-  let finalSlug = baseSlug;
-  let counter = 1;
+      if (!response.ok) {
+        console.warn(
+          `Failed to check project slug availability (status: ${response.status}), using fallback logic for slug: ${slugToCheck}`,
+        );
+        // Consider unavailable if API call fails, to force suffixing or timestamp
+        return { data: false, error: `API error: ${response.statusText}` };
+      }
 
-  // Keep checking until we find an available slug
-  while (true) {
-    const response = await fetch(`/api/projects/check-slug?slug=${encodeURIComponent(finalSlug)}`);
-
-    if (!response.ok) {
-      // If check fails, just use the original slug and let the API handle the error
-      console.warn('Failed to check slug availability, using original slug');
-      return baseSlug;
+      const result = await response.json();
+      // Assuming the API returns { available: boolean }
+      return { data: result.available, error: null };
+    } catch (error) {
+      console.warn(`Error checking project slug availability for slug: ${slugToCheck}:`, error);
+      // Consider unavailable on network error, to force suffixing or timestamp
+      return { data: false, error: error instanceof Error ? error.message : 'Network error' };
     }
+  };
 
-    const result = await response.json();
+  const slugResponse = await generateSlug(baseName, {
+    checkAvailability,
+    excludeId, // Pass excludeId to generateSlug options
+    allowUnderscores: false, // Project slugs typically don't allow underscores
+  });
 
-    if (result.available) {
-      return finalSlug;
-    }
-
-    // Slug is taken, try with a number suffix
-    finalSlug = `${baseSlug}-${counter}`;
-    counter++;
-
-    // Safety check to prevent infinite loop
-    if (counter > 100) {
-      console.warn('Too many slug attempts, using timestamp suffix');
-      return `${baseSlug}-${Date.now()}`;
-    }
+  if (slugResponse.error || !slugResponse.data) {
+    console.warn(
+      `Slug generation failed for baseName '${baseName}'. Error: ${slugResponse.error}. Using fallback. Fallback slug: ${baseName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
+    );
+    // Fallback if generateSlug itself has an error or returns no data
+    // This should be a simple, safe slug as a last resort.
+    const safeBase =
+      baseName
+        .toLowerCase()
+        .replace(/[^a-z0-9\-]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '') || 'project';
+    return `${safeBase}-${Date.now()}`;
   }
-};
+
+  return slugResponse.data;
+}
 
 /**
  * Schema for creating a new project
@@ -104,16 +121,26 @@ export const createProjectSchema = z.object({
 export type CreateProjectForm = z.infer<typeof createProjectSchema>;
 
 /**
- * Schema for updating a project
+ * Schema for updating a project (includes id for full validation)
  */
 export const updateProjectSchema = createProjectSchema.partial().extend({
   id: z.string().uuid(),
 });
 
 /**
+ * Schema for updating a project body (without id, used in API routes)
+ */
+export const updateProjectBodySchema = createProjectSchema.partial();
+
+/**
  * Type for updating a project
  */
 export type UpdateProjectForm = z.infer<typeof updateProjectSchema>;
+
+/**
+ * Type for updating a project body
+ */
+export type UpdateProjectBodyForm = z.infer<typeof updateProjectBodySchema>;
 
 /**
  * Schema for validating project snapshots (matching DB structure)

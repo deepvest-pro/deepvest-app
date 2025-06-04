@@ -33,6 +33,7 @@
     "react-dropzone": "^14.3.8",
     "react-hook-form": "^7.56.4",
     "react-markdown": "^10.1.0",
+    "react-slugify": "^4.0.1",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
     "sass": "^1.89.0",

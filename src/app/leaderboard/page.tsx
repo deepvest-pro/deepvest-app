@@ -1,6 +1,10 @@
-import { LeaderboardList } from '@/components/leaderboard/LeaderboardList';
+import type { Metadata } from 'next';
+import { getLeaderboardProjects } from '@/lib/supabase/helpers';
+import { LeaderboardDisplay } from '@/components/leaderboard/LeaderboardDisplay';
 
-export const metadata = {
+export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = {
   title: 'Leaderboard | DeepVest',
   description: 'Discover the highest-scoring startups on DeepVest, ranked by our AI analysis',
   keywords: [
@@ -25,6 +29,31 @@ export const metadata = {
   },
 };
 
-export default function LeaderboardPage() {
-  return <LeaderboardList />;
+interface LeaderboardPageProps {
+  searchParams: Promise<{
+    min_score?: string;
+    page?: string;
+  }>;
+}
+
+export default async function LeaderboardPage({ searchParams }: LeaderboardPageProps) {
+  // Parse search parameters (await needed for Next.js 15)
+  const params = await searchParams;
+  const minScore = params.min_score ? Number(params.min_score) : undefined;
+  const page = params.page ? Math.max(1, Number(params.page)) : 1;
+  const pageSize = 20;
+  const offset = (page - 1) * pageSize;
+
+  // Fetch leaderboard data on server side
+  const { data, error } = await getLeaderboardProjects({
+    limit: pageSize,
+    offset,
+    minScore,
+  });
+
+  if (error) {
+    console.error('Failed to load leaderboard:', error);
+  }
+
+  return <LeaderboardDisplay initialData={data} error={error} currentPage={page} />;
 }

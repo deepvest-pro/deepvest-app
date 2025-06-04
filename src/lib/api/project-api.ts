@@ -1,10 +1,94 @@
 /**
- * Project API client functions
+ * Project API server functions
+ * These functions use server-side helpers and are intended for API routes
  */
 
+import { APIClient } from '@/lib/utils/api';
 import type { ProjectDataFromAI, TeamMemberFromAI } from '@/types/ai';
-import { generateSlug } from '@/lib/validations/project';
+import { generateSlug } from '@/lib/utils/slug.util';
 import { removeFileExtension } from '@/lib/utils/file-validation';
+
+/**
+ * Gets project details with permissions and snapshots
+ * @param projectId Project ID
+ * @returns Project details
+ */
+export const getProjectWithDetails = async (projectId: string) => {
+  const { getProjectWithDetails: getProjectWithDetailsHelper } = await import(
+    '@/lib/supabase/helpers'
+  );
+  return getProjectWithDetailsHelper(projectId);
+};
+
+/**
+ * Gets public project documents
+ * @param projectId Project ID
+ * @returns Public documents
+ */
+export const getPublicProjectDocuments = async (projectId: string) => {
+  const { getPublicProjectDocuments: getPublicProjectDocumentsHelper } = await import(
+    '@/lib/supabase/helpers'
+  );
+  return getPublicProjectDocumentsHelper(projectId);
+};
+
+/**
+ * Gets public project team members
+ * @param projectId Project ID
+ * @returns Public team members
+ */
+export const getPublicProjectTeamMembers = async (projectId: string) => {
+  const { getPublicProjectTeamMembers: getPublicProjectTeamMembersHelper } = await import(
+    '@/lib/supabase/helpers'
+  );
+  return getPublicProjectTeamMembersHelper(projectId);
+};
+
+/**
+ * Updates project
+ * @param projectId Project ID
+ * @param projectFields Data to update
+ * @returns Updated project
+ */
+export const updateProject = async (projectId: string, projectFields: Record<string, unknown>) => {
+  const { updateProject: updateProjectHelper } = await import('@/lib/supabase/helpers');
+  return updateProjectHelper(projectId, projectFields);
+};
+
+/**
+ * Deletes project
+ * @param projectId Project ID
+ * @returns Deletion result
+ */
+export const deleteProject = async (projectId: string) => {
+  try {
+    // Delete project files from storage
+    const { deleteProjectFiles } = await import('@/lib/supabase/helpers');
+    const { success: filesDeleted, error: filesError } = await deleteProjectFiles(projectId);
+
+    if (!filesDeleted) {
+      console.error('Failed to delete project files:', filesError);
+      // Continue with project deletion even if files weren't deleted
+      // This prevents orphaned records in the database
+    }
+
+    // Delete project from database (permissions and snapshots will be deleted cascadingly)
+    const { SupabaseClientFactory } = await import('@/lib/supabase/client-factory');
+    const supabase = await SupabaseClientFactory.getServerClient();
+    const { error } = await supabase.from('projects').delete().eq('id', projectId);
+
+    if (error) {
+      return { data: null, error: error.message };
+    }
+
+    return { data: { success: true }, error: null };
+  } catch (error) {
+    return {
+      data: null,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+};
 
 /**
  * Creates a new project via API
@@ -21,23 +105,16 @@ export const createProject = async (
   },
   skipAutoTeam = false,
 ) => {
-  const response = await fetch('/api/projects', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      ...projectData,
-      skipAutoTeam, // Add flag to skip auto team creation
-    }),
+  const response = await APIClient.post('/projects', {
+    ...projectData,
+    skipAutoTeam, // Add flag to skip auto team creation
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to create project: ${errorText}`);
+  if (!response.success || !response.data) {
+    throw new Error(response.error || 'Failed to create project');
   }
 
-  return response.json();
+  return response.data;
 };
 
 /**
@@ -46,24 +123,17 @@ export const createProject = async (
  * @returns Created snapshot
  */
 export const createSnapshot = async (projectId: string) => {
-  const response = await fetch(`/api/projects/${projectId}/snapshots`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      name: 'Initial snapshot',
-      description: 'Auto-generated from presentation upload',
-      status: 'idea',
-    }),
+  const response = await APIClient.post(`/projects/${projectId}/snapshots`, {
+    name: 'Initial snapshot',
+    description: 'Auto-generated from presentation upload',
+    status: 'idea',
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to create snapshot: ${errorText}`);
+  if (!response.success || !response.data) {
+    throw new Error(response.error || 'Failed to create snapshot');
   }
 
-  return response.json();
+  return response.data;
 };
 
 /**
@@ -73,57 +143,34 @@ export const createSnapshot = async (projectId: string) => {
  */
 export const updateSnapshot = async (projectId: string, snapshotData: Record<string, unknown>) => {
   // Get the current new_snapshot_id from the project
-  const projectResponse = await fetch(`/api/projects/${projectId}`);
-  if (!projectResponse.ok) {
+  const projectResponse = await APIClient.get<{
+    project: { new_snapshot_id?: string };
+    documents: unknown[];
+    team: unknown[];
+  }>(`/projects/${projectId}`);
+
+  if (!projectResponse.success || !projectResponse.data) {
     throw new Error('Failed to get project details');
   }
 
-  const projectResult = await projectResponse.json();
-  const newSnapshotId = projectResult.project.new_snapshot_id;
+  // Handle new API response structure
+  const project = projectResponse.data.project;
+  const newSnapshotId = project?.new_snapshot_id;
 
   if (!newSnapshotId) {
     throw new Error('No snapshot found to update');
   }
 
-  const response = await fetch(`/api/projects/${projectId}/snapshots/${newSnapshotId}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(snapshotData),
-  });
+  const response = await APIClient.put(
+    `/projects/${projectId}/snapshots/${newSnapshotId}`,
+    snapshotData,
+  );
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to update snapshot: ${errorText}`);
+  if (!response.success || !response.data) {
+    throw new Error(response.error || 'Failed to update snapshot');
   }
 
-  return response.json();
-};
-
-/**
- * Updates a project with new data
- * @param projectId Project ID
- * @param projectFields Project fields to update
- */
-export const updateProject = async (projectId: string, projectFields: Record<string, unknown>) => {
-  if (Object.keys(projectFields).length === 0) {
-    return; // Nothing to update
-  }
-
-  const response = await fetch(`/api/projects/${projectId}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(projectFields),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.warn(`Failed to update project fields: ${errorText}`);
-    // Don't throw error, this is not critical
-  }
+  return response.data;
 };
 
 /**
@@ -137,17 +184,13 @@ export const uploadFile = async (projectId: string, file: File) => {
   formData.append('file', file);
   formData.append('uploadType', 'document');
 
-  const response = await fetch(`/api/projects/${projectId}/upload`, {
-    method: 'POST',
-    body: formData,
-  });
+  const response = await APIClient.upload(`/projects/${projectId}/upload`, formData);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to upload file: ${errorText}`);
+  if (!response.success || !response.data) {
+    throw new Error(response.error || 'Failed to upload file');
   }
 
-  return response.json();
+  return response.data;
 };
 
 /**
@@ -161,27 +204,20 @@ export const createDocument = async (projectId: string, fileName: string, fileUr
   // Generate slug from filename
   const slug = generateSlug(fileName);
 
-  const response = await fetch(`/api/projects/${projectId}/documents`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      title: removeFileExtension(fileName), // Remove extension for title
-      slug: slug,
-      content_type: 'presentation',
-      file_urls: [fileUrl],
-      description: 'Presentation uploaded via drag & drop',
-      is_public: true,
-    }),
+  const response = await APIClient.post(`/projects/${projectId}/documents`, {
+    title: removeFileExtension(fileName), // Remove extension for title
+    slug: slug,
+    content_type: 'presentation',
+    file_urls: [fileUrl],
+    description: 'Presentation uploaded via drag & drop',
+    is_public: true,
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to create document: ${errorText}`);
+  if (!response.success || !response.data) {
+    throw new Error(response.error || 'Failed to create document');
   }
 
-  return response.json();
+  return response.data;
 };
 
 /**
@@ -190,24 +226,17 @@ export const createDocument = async (projectId: string, fileName: string, fileUr
  * @returns Transcription result
  */
 export const transcribeFile = async (fileUrl: string) => {
-  const response = await fetch('/api/transcribe', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      url: fileUrl,
-      prompt:
-        'Extract all text content from this document. Preserve the structure and formatting as much as possible.',
-    }),
+  const response = await APIClient.post('/transcribe', {
+    url: fileUrl,
+    prompt:
+      'Extract all text content from this document. Preserve the structure and formatting as much as possible.',
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to transcribe file: ${errorText}`);
+  if (!response.success || !response.data) {
+    throw new Error(response.error || 'Failed to transcribe file');
   }
 
-  return response.json();
+  return response.data;
 };
 
 /**
@@ -238,26 +267,23 @@ export const generateProjectData = async (
 
   prompt = prompt + '\n\n' + transcription;
 
-  const response = await fetch('/api/ai/generate-content', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      prompt: prompt,
-    }),
+  const response = await APIClient.post<{
+    result: string;
+    metadata?: {
+      promptLength: number;
+      model: string;
+    };
+  }>('/ai/generate-content', {
+    prompt: prompt,
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to generate project data: ${errorText}`);
+  if (!response.success || !response.data) {
+    throw new Error(response.error || 'Failed to generate project data');
   }
-
-  const result = await response.json();
 
   // Parse the JSON from the result string
   const { parseAIResponse } = await import('@/lib/utils/project-helpers');
-  return parseAIResponse(result.result);
+  return parseAIResponse(response.data.result);
 };
 
 /**
@@ -267,22 +293,15 @@ export const generateProjectData = async (
  * @param content Content to update
  */
 export const updateDocument = async (projectId: string, documentId: string, content: string) => {
-  const response = await fetch(`/api/projects/${projectId}/documents/${documentId}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      content: content,
-    }),
+  const response = await APIClient.put(`/projects/${projectId}/documents/${documentId}`, {
+    content: content,
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to update document: ${errorText}`);
+  if (!response.success || !response.data) {
+    throw new Error(response.error || 'Failed to update document');
   }
 
-  return response.json();
+  return response.data;
 };
 
 /**
@@ -327,22 +346,17 @@ export const createTeamFromAI = async (
         departed_reason: null,
       };
 
-      const response = await fetch(`/api/projects/${projectId}/team-members`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(teamMemberData),
-      });
+      const response = await APIClient.post<{ team_member: unknown }>(
+        `/projects/${projectId}/team-members`,
+        teamMemberData,
+      );
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Failed to create team member ${member.name}:`, errorText);
+      if (!response.success || !response.data) {
+        console.error(`Failed to create team member ${member.name}:`, response.error);
         continue; // Skip this member but continue with others
       }
 
-      const result = await response.json();
-      createdMembers.push(result.team_member);
+      createdMembers.push(response.data.team_member);
       console.log(`Team member created: ${member.name} with positions:`, member.positions);
     } catch (error) {
       console.error(`Error creating team member ${member.name}:`, error);

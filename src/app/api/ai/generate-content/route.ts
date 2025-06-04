@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { z } from 'zod';
+import { createAPIHandler } from '@/lib/api/base-handler';
+import { APIError } from '@/lib/api/middleware/auth';
 import {
-  GenerateContentRequest,
   GenerateContentResponse,
   GeminiGenerateRequest,
   GeminiGenerateResponse,
@@ -9,97 +10,10 @@ import {
   MAX_PROMPT_LENGTH,
 } from '@/types/ai';
 
-// CORS headers
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
-
 // Request validation schema
 const generateContentRequestSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required').max(MAX_PROMPT_LENGTH, 'Prompt too long'),
 });
-
-/**
- * Handle CORS preflight requests
- */
-export async function OPTIONS() {
-  return new Response(null, { headers: corsHeaders });
-}
-
-/**
- * Main content generation endpoint
- */
-export async function POST(request: NextRequest) {
-  const startTime = Date.now();
-
-  try {
-    // Parse and validate request body
-    const body = await request.json();
-    const validationResult = generateContentRequestSchema.safeParse(body);
-
-    if (!validationResult.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Validation error: ${validationResult.error.errors
-            .map(e => e.message)
-            .join(', ')}`,
-        } as GenerateContentResponse,
-        { status: 400, headers: corsHeaders },
-      );
-    }
-
-    const { prompt }: GenerateContentRequest = validationResult.data;
-
-    // Check if Gemini API key is configured
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.error('GEMINI_API_KEY not configured');
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'AI service not configured',
-        } as GenerateContentResponse,
-        { status: 500, headers: corsHeaders },
-      );
-    }
-
-    // Generate content using Gemini API
-    const generatedContent = await generateWithGemini(prompt, apiKey);
-
-    const processingTime = Date.now() - startTime;
-
-    return NextResponse.json(
-      {
-        success: true,
-        result: generatedContent,
-        metadata: {
-          promptLength: prompt.length,
-          processingTime,
-        },
-      } as GenerateContentResponse,
-      { headers: corsHeaders },
-    );
-  } catch (error) {
-    console.error('Content generation error:', error);
-
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    const processingTime = Date.now() - startTime;
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: errorMessage,
-        metadata: {
-          processingTime,
-        },
-      } as GenerateContentResponse,
-      { status: 500, headers: corsHeaders },
-    );
-  }
-}
 
 /**
  * Generate content using Gemini API
@@ -140,14 +54,14 @@ async function generateWithGemini(prompt: string, apiKey: string): Promise<strin
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+      throw new APIError(`Gemini API error: ${response.status} ${response.statusText}`, 500);
     }
 
     const data: GeminiGenerateResponse = await response.json();
 
     // Handle API errors
     if (data.error) {
-      throw new Error(`Gemini API error: ${data.error.message}`);
+      throw new APIError(`Gemini API error: ${data.error.message}`, 500);
     }
 
     // Extract response text
@@ -161,14 +75,45 @@ async function generateWithGemini(prompt: string, apiKey: string): Promise<strin
       }
     }
 
-    throw new Error('No content generated from Gemini API');
+    throw new APIError('No content generated from Gemini API', 500);
   } catch (error) {
-    if (error instanceof Error) {
-      if (error.name === 'AbortError') {
-        throw new Error('Gemini API request timeout');
-      }
+    if (error instanceof APIError) {
       throw error;
     }
-    throw new Error('Failed to generate content with Gemini API');
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        throw new APIError('Gemini API request timeout', 408);
+      }
+      throw new APIError(`Gemini API error: ${error.message}`, 500);
+    }
+    throw new APIError('Failed to generate content with Gemini API', 500);
   }
 }
+
+/**
+ * Main content generation endpoint
+ */
+export const POST = createAPIHandler(async (request: NextRequest) => {
+  // Parse and validate request body
+  const body = await request.json();
+  const validatedData = generateContentRequestSchema.parse(body);
+  const { prompt } = validatedData;
+
+  // Check if Gemini API key is configured
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new APIError('AI service not configured', 500);
+  }
+
+  // Generate content using Gemini API
+  const generatedContent = await generateWithGemini(prompt, apiKey);
+
+  // Return response with metadata
+  return {
+    result: generatedContent,
+    metadata: {
+      promptLength: prompt.length,
+      model: 'gemini-2.0-flash',
+    },
+  } as Omit<GenerateContentResponse, 'success'>;
+});

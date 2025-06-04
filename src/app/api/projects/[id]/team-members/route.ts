@@ -1,61 +1,48 @@
-import { NextResponse } from 'next/server';
-import { z } from 'zod';
-import { checkUserProjectRole, getPublicProjectTeamMembers } from '@/lib/supabase/helpers';
-import { createSupabaseServerClient } from '@/lib/supabase/client';
-import { createTeamMemberSchema } from '@/lib/validations/team';
+import { NextRequest } from 'next/server';
+import { createAPIHandlerWithParams } from '@/lib/api/base-handler';
+import {
+  APIError,
+  requireAuth,
+  requireProjectPermission,
+  getOptionalAuth,
+} from '@/lib/api/middleware/auth';
+import { ValidationSchemas } from '@/lib/validations';
+import { getPublicProjectTeamMembers, checkUserProjectRole } from '@/lib/supabase/helpers';
+import { SupabaseClientFactory } from '@/lib/supabase/client-factory';
 import { syncSnapshotData } from '@/lib/utils/snapshot-sync';
-
-interface RouteContext {
-  params: Promise<{
-    id: string;
-  }>;
-}
 
 /**
  * GET /api/projects/[id]/team-members
  * Get team members for a specific project
  */
-export async function GET(request: Request, { params }: RouteContext) {
-  try {
-    const { id: projectId } = await params;
-    const url = new URL(request.url);
-    const publicOnly = url.searchParams.get('public_only') === 'true';
+export const GET = createAPIHandlerWithParams(async (request: NextRequest, params) => {
+  const { id: projectId } = params;
+  const url = new URL(request.url);
+  const publicOnly = url.searchParams.get('public_only') === 'true';
 
-    if (publicOnly) {
-      // Use helper function for public team members
-      const { data: teamMembers, error } = await getPublicProjectTeamMembers(projectId);
+  // If explicitly requested public only, return public team members without authentication
+  if (publicOnly) {
+    const { data: teamMembers, error } = await getPublicProjectTeamMembers(projectId);
 
-      if (error) {
-        return NextResponse.json({ error: 'Failed to fetch team members' }, { status: 500 });
-      }
-
-      return NextResponse.json({ team_members: teamMembers });
+    if (error) {
+      throw new APIError('Failed to fetch team members', 500);
     }
 
-    // For non-public requests, check authentication and permissions
-    const supabase = await createSupabaseServerClient();
+    return { team_members: teamMembers };
+  }
 
-    // Check authentication
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+  // Check if user is authenticated and has project access
+  const user = await getOptionalAuth();
+  let hasProjectAccess = false;
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  if (user) {
+    // Check if user has access to this project
+    hasProjectAccess = await checkUserProjectRole(user.id, projectId, 'viewer');
+  }
 
-    // Check if user has permission to view this project
-    const { data: permission, error: permissionError } = await supabase
-      .from('project_permissions')
-      .select('role')
-      .eq('project_id', projectId)
-      .eq('user_id', user.id)
-      .single();
-
-    if (permissionError || !permission) {
-      return NextResponse.json({ error: 'Project not found or access denied' }, { status: 404 });
-    }
+  // If user has project access, return all team members (including private ones)
+  if (hasProjectAccess) {
+    const supabase = await SupabaseClientFactory.getServerClient();
 
     // Get all team members for the project (not just public ones)
     const { data: teamMembers, error: teamError } = await supabase
@@ -66,8 +53,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       .order('created_at', { ascending: false });
 
     if (teamError) {
-      console.error('Error fetching team members:', teamError);
-      return NextResponse.json({ error: 'Failed to fetch team members' }, { status: 500 });
+      throw new APIError('Failed to fetch team members', 500);
     }
 
     // Get author information if we have team members
@@ -87,137 +73,95 @@ export async function GET(request: Request, { params }: RouteContext) {
       }));
     }
 
-    return NextResponse.json({ team_members: teamMembersWithAuthors });
-  } catch (error) {
-    console.error('Error fetching project team members:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return { team_members: teamMembersWithAuthors };
   }
-}
+
+  // If no project access, check if project is public and return only public team members
+  const supabase = await SupabaseClientFactory.getServerClient();
+  const { data: project, error: projectError } = await supabase
+    .from('projects')
+    .select('is_public, is_archived')
+    .eq('id', projectId)
+    .single();
+
+  if (projectError || !project?.is_public || project.is_archived) {
+    throw new APIError('Project not found or access denied', 404);
+  }
+
+  // Return public team members for public project
+  const { data: teamMembers, error } = await getPublicProjectTeamMembers(projectId);
+
+  if (error) {
+    throw new APIError('Failed to fetch team members', 500);
+  }
+
+  return { team_members: teamMembers };
+});
 
 /**
  * POST /api/projects/[id]/team-members
  * Create a new team member
  */
-export async function POST(request: Request, { params }: RouteContext) {
-  const supabase = await createSupabaseServerClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { id: projectId } = await params;
-
-  console.log('POST team member - User ID:', user.id);
-  console.log('POST team member - Project ID:', projectId);
+export const POST = createAPIHandlerWithParams(async (request: NextRequest, params) => {
+  const user = await requireAuth();
+  const { id: projectId } = params;
 
   // Check if user has permission to manage team members (editor, admin, or owner)
-  const hasAccess = await checkUserProjectRole(user.id, projectId, 'editor');
+  await requireProjectPermission(user.id, projectId, 'editor');
 
-  console.log('POST team member - Has editor+ access:', hasAccess);
+  const body = await request.json();
 
-  if (!hasAccess) {
-    return NextResponse.json(
-      {
-        error:
-          'You do not have permission to manage team members for this project. Editor role or higher required.',
-      },
-      { status: 403 },
-    );
+  // Handle both 'position' (string) and 'positions' (array) fields for backward compatibility
+  let positions = body.positions;
+  if (!positions && body.position) {
+    // Convert single position string to array
+    positions = [body.position];
   }
 
-  try {
-    const json = await request.json();
+  // Add project_id and author_id to the request data
+  const teamMemberData = {
+    ...body,
+    positions, // Use the processed positions array
+    project_id: projectId,
+    author_id: user.id,
+  };
 
-    // Handle both 'position' (string) and 'positions' (array) fields
-    let positions = json.positions;
-    if (!positions && json.position) {
-      // Convert single position string to array
-      positions = [json.position];
-    }
+  // Remove the old 'position' field if it exists
+  delete teamMemberData.position;
 
-    // Add project_id and author_id to the request data
-    const teamMemberData = {
-      ...json,
-      positions, // Use the processed positions array
-      project_id: projectId,
-      author_id: user.id,
-    };
+  // Validate the request body
+  const validatedData = ValidationSchemas.team.create.parse(teamMemberData);
 
-    // Remove the old 'position' field if it exists
-    delete teamMemberData.position;
+  const supabase = await SupabaseClientFactory.getServerClient();
 
-    console.log('Team member data to validate:', teamMemberData);
-
-    // Validate the request body
-    const validatedData = createTeamMemberSchema.parse(teamMemberData);
-
-    console.log('Validated team member data:', validatedData);
-
-    // Check if email is already used by another team member in this project
-    if (validatedData.email) {
-      const { data: existingMember } = await supabase
-        .from('team_members')
-        .select('id')
-        .eq('project_id', projectId)
-        .eq('email', validatedData.email)
-        .is('deleted_at', null)
-        .single();
-
-      if (existingMember) {
-        return NextResponse.json(
-          { error: 'A team member with this email already exists in this project' },
-          { status: 409 },
-        );
-      }
-    }
-
-    console.log('Inserting team member into database...');
-
-    // Create the team member
-    const { data, error } = await supabase
+  // Check if email is already used by another team member in this project
+  if (validatedData.email) {
+    const { data: existingMember } = await supabase
       .from('team_members')
-      .insert(validatedData)
-      .select('*')
+      .select('id')
+      .eq('project_id', projectId)
+      .eq('email', validatedData.email)
+      .is('deleted_at', null)
       .single();
 
-    if (error) {
-      console.error('Error creating team member:', error);
-      console.error('Error details:', {
-        code: error.code,
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-      });
-      return NextResponse.json(
-        {
-          error: 'Failed to create team member',
-          details: error.message,
-          code: error.code,
-        },
-        { status: 500 },
-      );
+    if (existingMember) {
+      throw new APIError('A team member with this email already exists in this project', 409);
     }
-
-    console.log('Team member created successfully:', data);
-
-    // Sync snapshot contents and team members to keep data up to date
-    await syncSnapshotData(projectId);
-
-    return NextResponse.json({ team_member: data }, { status: 201 });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      console.error('Validation error:', error.errors);
-      return NextResponse.json(
-        { error: 'Invalid input data', details: error.errors },
-        { status: 400 },
-      );
-    }
-
-    console.error('Error in POST /api/projects/[id]/team-members:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
-}
+
+  // Create the team member
+  const { data, error } = await supabase
+    .from('team_members')
+    .insert(validatedData)
+    .select('*')
+    .single();
+
+  if (error) {
+    throw new APIError(`Failed to create team member: ${error.message}`, 500);
+  }
+
+  // Sync snapshot contents and team members to keep data up to date
+  await syncSnapshotData(projectId);
+
+  return { team_member: data };
+});

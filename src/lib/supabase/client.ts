@@ -1,49 +1,10 @@
 'use server';
 
-import { cookies } from 'next/headers';
-// import { createClient } from '@supabase/supabase-js'; // No longer used directly
-// import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'; // Old helper
-import { createServerClient } from '@supabase/ssr'; // New helper from @supabase/ssr
 import type { Database } from '@/types/supabase';
 import type { UserData } from '@/types/auth';
+import { SupabaseClientFactory } from './client-factory';
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
-
-/**
- * Creates a Supabase client for server components (pages, layouts, server actions).
- * This client is primarily for reading session and data.
- * Uses createServerClient from @supabase/ssr for proper Next.js integration.
- */
-export async function createSupabaseServerClient() {
-  const cookieStore = await cookies();
-  return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              try {
-                cookieStore.set(name, value, options);
-              } catch {
-                // Individual cookie setting failed - this is expected in Server Components
-                // and can be safely ignored as middleware handles session refresh
-              }
-            });
-          } catch {
-            // The `setAll` method was called from a Server Component.
-            // This is expected behavior and can be safely ignored
-            // as middleware handles session refresh
-          }
-        },
-      },
-    },
-  );
-}
 
 /*
 /**
@@ -52,19 +13,13 @@ export async function createSupabaseServerClient() {
  * where direct cookie manipulation (get/set/remove) is needed and auth-helpers defaults are insufficient.
  * CAUTION: Prone to issues like "cookies() should be awaited" if cookieStore is not handled carefully.
  */
-/*
-// Commented out as it was causing issues and is replaced by createSupabaseServerClient from @supabase/ssr
-export async function createServerSupabaseClientWithCustomStorage() {
-  // ...
-}
-*/
 
 /**
- * Get current user
+ * Get current user using the factory client
  */
 export async function getCurrentUser() {
   try {
-    const supabase = await createSupabaseServerClient(); // Uses the new @supabase/ssr client
+    const supabase = await SupabaseClientFactory.getServerClient();
     const { data, error } = await supabase.auth.getUser();
 
     if (error || !data?.user) {
@@ -74,7 +29,13 @@ export async function getCurrentUser() {
 
     return data.user;
   } catch (error) {
-    console.error('[getCurrentUser] Error getting current user:', error);
+    // Only log errors in development or if it's not a dynamic server usage error
+    if (
+      process.env.NODE_ENV === 'development' ||
+      !(error instanceof Error && error.message?.includes('Dynamic server usage'))
+    ) {
+      console.error('[getCurrentUser] Error getting current user:', error);
+    }
     return null;
   }
 }
@@ -95,11 +56,11 @@ export async function getCurrentSession() {
 }
 
 /**
- * Get user data with profile
+ * Get user data with profile using the factory client
  */
 export async function getUserWithProfile(): Promise<UserData | null> {
   try {
-    const supabase = await createSupabaseServerClient(); // Uses the new @supabase/ssr client
+    const supabase = await SupabaseClientFactory.getServerClient();
 
     const { data: userData, error: userError } = await supabase.auth.getUser();
 
@@ -116,7 +77,9 @@ export async function getUserWithProfile(): Promise<UserData | null> {
 
     if (profileError && profileError.code !== 'PGRST116') {
       // PGRST116 means no rows found, which is acceptable if profile doesn't exist yet
-      console.error('[getUserWithProfile] Error fetching profile:', profileError);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[getUserWithProfile] Error fetching profile:', profileError);
+      }
       // Decide if you want to return null or user without profile here
     }
 
@@ -146,7 +109,13 @@ export async function getUserWithProfile(): Promise<UserData | null> {
       profile,
     };
   } catch (error) {
-    console.error('[getUserWithProfile] Error getting user with profile:', error);
+    // Only log errors in development or if it's not a dynamic server usage error
+    if (
+      process.env.NODE_ENV === 'development' ||
+      !(error instanceof Error && error.message?.includes('Dynamic server usage'))
+    ) {
+      console.error('[getUserWithProfile] Error getting user with profile:', error);
+    }
     return null;
   }
 }

@@ -1,49 +1,40 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { PlusIcon, GlobeIcon } from '@radix-ui/react-icons';
 import { Heading, Container, Text, Box, Button, Flex, Card, Avatar, Badge } from '@radix-ui/themes';
-import type { ProjectWithSnapshot } from '@/types/supabase';
+import { useApiQuery, QUERY_KEYS } from '@/hooks';
+import type { ProjectWithSnapshot } from '@/types';
 import { StatusBadge } from '../ui/StatusBadge';
 
 interface ProjectsListProps {
   isAuthenticated: boolean;
+  initialProjects?: (ProjectWithSnapshot & { role?: string | null })[];
+  error?: string | null;
 }
 
-interface ProjectsResponse {
+interface ProjectsAPIResponse {
   projects: (ProjectWithSnapshot & { role?: string | null })[];
 }
 
-export function ProjectsList({ isAuthenticated }: ProjectsListProps) {
-  const [projects, setProjects] = useState<(ProjectWithSnapshot & { role?: string | null })[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export function ProjectsList({
+  isAuthenticated,
+  initialProjects = [],
+  error: initialError = null,
+}: ProjectsListProps) {
+  // Use new API hook with fallback to initial data
+  const {
+    data: apiData,
+    isLoading: loading,
+    error: apiError,
+  } = useApiQuery<ProjectsAPIResponse>('/projects', {
+    queryKey: QUERY_KEYS.projects.all,
+    enabled: initialProjects.length === 0 && !initialError, // Only fetch if no initial data
+  });
 
-  useEffect(() => {
-    loadProjects();
-  }, [isAuthenticated]);
-
-  const loadProjects = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/projects');
-
-      if (!response.ok) {
-        throw new Error(`Failed to load projects: ${response.status}`);
-      }
-
-      const data: ProjectsResponse = await response.json();
-      setProjects(data.projects || []);
-    } catch (err) {
-      console.error('Error loading projects:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load projects');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Use API data if available, otherwise use initial data
+  const projects = apiData?.projects || initialProjects;
+  const error = apiError || initialError;
 
   const renderProjectCard = (project: ProjectWithSnapshot & { role?: string | null }) => {
     const currentSnapshot = project.new_snapshot || project.public_snapshot;
@@ -202,7 +193,7 @@ export function ProjectsList({ isAuthenticated }: ProjectsListProps) {
               <Text size="4" color="red">
                 Error loading projects: {error}
               </Text>
-              <Button onClick={loadProjects}>Try Again</Button>
+              <Button onClick={() => window.location.reload()}>Try Again</Button>
             </Flex>
           </Box>
         </Card>

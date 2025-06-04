@@ -1,8 +1,7 @@
 'use client';
 
-import { useForm, UseFormRegister, FieldError } from 'react-hook-form';
+import { useState } from 'react';
 import Link from 'next/link';
-import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Box,
   Container,
@@ -15,136 +14,48 @@ import {
   Spinner,
   Tabs,
   Separator,
-  Tooltip,
-  Badge,
 } from '@radix-ui/themes';
-import { useUpdateProfile } from '@/lib/auth/auth-hooks';
-import { useToastHelpers } from '@/components/layout/ToastProvider';
-import { profileUpdateSchema, type ProfileUpdateData } from '@/lib/validations/auth';
-import type { Profile } from '@/types/auth';
-import { FileUploadArea } from '@/components/forms/file-upload-area';
-import { MAX_AVATAR_SIZE_BYTES, MAX_COVER_SIZE_BYTES } from '@/lib/file-constants';
-import { useState } from 'react';
 import {
   PersonIcon,
   HomeIcon,
   GlobeIcon,
   Share1Icon,
-  ReaderIcon,
   SewingPinIcon,
   CheckIcon,
-  Cross2Icon,
   ArrowLeftIcon,
 } from '@radix-ui/react-icons';
+import { useUpdateProfile } from '@/lib/auth/auth-hooks';
+import { ValidationSchemas } from '@/lib/validations';
+import { APIClient } from '@/lib/utils/api';
+import { MAX_AVATAR_SIZE_BYTES, MAX_COVER_SIZE_BYTES } from '@/lib/file-constants';
+import { useFormHandler } from '@/hooks/useFormHandler';
+import type { Profile } from '@/types/auth';
+import { StyledInput, StyledTextArea } from '@/components/forms';
+import { FileUploadArea } from '@/components/forms/file-upload-area';
+import { useToastHelpers } from '@/components/layout/ToastProvider';
 
 interface ProfileEditFormProps {
   initialData: Profile | null;
 }
 
-// Styled input component
-const StyledInput = ({
-  id,
-  placeholder,
-  register,
-  error,
-  disabled,
-  icon: Icon = null,
-  label,
-  type = 'text',
-}: {
-  id: keyof ProfileUpdateData;
-  placeholder: string;
-  register: UseFormRegister<ProfileUpdateData>;
-  error?: FieldError | undefined;
-  disabled?: boolean;
-  icon?: React.ComponentType<{ width: string; height: string; color: string }> | null;
-  label: string;
-  type?: string;
-}) => (
-  <Box mb="3">
-    <Flex gap="2" mb="1" align="center">
-      {Icon && <Icon width="16" height="16" color="var(--gray-8)" />}
-      <Text as="label" htmlFor={id} size="2" weight="medium">
-        {label}
-      </Text>
-    </Flex>
-    <input
-      id={id}
-      type={type}
-      placeholder={placeholder}
-      disabled={disabled}
-      style={{
-        width: '100%',
-        padding: '10px 12px',
-        borderRadius: 'var(--radius-2)',
-        border: '1px solid var(--gray-6)',
-        fontSize: '14px',
-      }}
-      {...register(id)}
-    />
-    {error && (
-      <Text size="1" color="red" mt="1">
-        {error.message}
-      </Text>
-    )}
-  </Box>
-);
-
-// Styled textarea component
-const StyledTextArea = ({
-  id,
-  placeholder,
-  register,
-  error,
-  disabled,
-  label,
-  rows = 4,
-}: {
-  id: keyof ProfileUpdateData;
-  placeholder: string;
-  register: UseFormRegister<ProfileUpdateData>;
-  error?: FieldError | undefined;
-  disabled?: boolean;
-  label: string;
-  rows?: number;
-}) => (
-  <Box mb="3">
-    <Text as="label" htmlFor={id} size="2" weight="medium" mb="1" style={{ display: 'block' }}>
-      {label}
-    </Text>
-    <textarea
-      id={id}
-      placeholder={placeholder}
-      rows={rows}
-      disabled={disabled}
-      style={{
-        width: '100%',
-        padding: '10px 12px',
-        borderRadius: 'var(--radius-2)',
-        border: '1px solid var(--gray-6)',
-        fontSize: '14px',
-        resize: 'vertical',
-      }}
-      {...register(id)}
-    />
-    {error && (
-      <Text size="1" color="red" mt="1">
-        {error.message}
-      </Text>
-    )}
-  </Box>
-);
+// Type for image upload API response
+interface ImageUploadResponse {
+  avatar_url?: string;
+  cover_url?: string;
+}
 
 export function ProfileEditForm({ initialData }: ProfileEditFormProps) {
   const { updateProfile, isLoading: isUpdatingProfileText } = useUpdateProfile();
-  const { success, error: toastError } = useToastHelpers();
+  const { success } = useToastHelpers();
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
   const [selectedCoverFile, setSelectedCoverFile] = useState<File | null>(null);
+  const [currentAvatarUrl, setCurrentAvatarUrl] = useState<string | null>(
+    initialData?.avatar_url || null,
+  );
+  const [currentCoverUrl, setCurrentCoverUrl] = useState<string | null>(
+    initialData?.cover_url || null,
+  );
   const [isUploadingImages, setIsUploadingImages] = useState(false);
-
-  // Local state to immediately reflect image changes after upload
-  const [currentAvatarUrl, setCurrentAvatarUrl] = useState(initialData?.avatar_url);
-  const [currentCoverUrl, setCurrentCoverUrl] = useState(initialData?.cover_url);
 
   const getStringValue = (value: unknown): string => {
     return typeof value === 'string' ? value : '';
@@ -168,371 +79,322 @@ export function ProfileEditForm({ initialData }: ProfileEditFormProps) {
     github_username: getNullableStringValue(initialData?.github_username),
   };
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting, isDirty },
-  } = useForm<ProfileUpdateData>({
-    resolver: zodResolver(profileUpdateSchema),
+  const form = useFormHandler({
+    schema: ValidationSchemas.auth.profile,
     defaultValues,
+    onSubmit: async textData => {
+      let imagesUpdated = false;
+      let textDataUpdateSkipped = false;
+
+      try {
+        if (selectedAvatarFile || selectedCoverFile) {
+          setIsUploadingImages(true);
+          try {
+            if (selectedAvatarFile) {
+              const formData = new FormData();
+              formData.append('file', selectedAvatarFile);
+              formData.append('uploadType', 'avatar');
+              const response = await APIClient.upload('/profile/image-upload', formData);
+
+              if (!response.success) {
+                throw new Error(response.error || 'Failed to upload avatar');
+              }
+
+              const uploadData = response.data as ImageUploadResponse;
+              if (uploadData?.avatar_url) {
+                setCurrentAvatarUrl(uploadData.avatar_url);
+                imagesUpdated = true;
+              }
+            }
+
+            if (selectedCoverFile) {
+              const formData = new FormData();
+              formData.append('file', selectedCoverFile);
+              formData.append('uploadType', 'cover');
+              const response = await APIClient.upload('/profile/image-upload', formData);
+
+              if (!response.success) {
+                throw new Error(response.error || 'Failed to upload cover image');
+              }
+
+              const uploadData = response.data as ImageUploadResponse;
+              if (uploadData?.cover_url) {
+                setCurrentCoverUrl(uploadData.cover_url);
+                imagesUpdated = true;
+              }
+            }
+          } finally {
+            setIsUploadingImages(false);
+          }
+        }
+
+        // Update text data only if it's different from initial data
+        if (form.formState.isDirty) {
+          await updateProfile(textData);
+        } else {
+          textDataUpdateSkipped = true;
+        }
+
+        // Clear selected files after successful upload
+        setSelectedAvatarFile(null);
+        setSelectedCoverFile(null);
+
+        // Show appropriate success message
+        if (imagesUpdated && !textDataUpdateSkipped) {
+          success('Profile and images updated successfully!');
+        } else if (imagesUpdated) {
+          success('Images updated successfully!');
+        } else if (!textDataUpdateSkipped) {
+          success('Profile updated successfully!');
+        }
+
+        return { success: true };
+      } catch (error) {
+        console.error('Error updating profile:', error);
+        const message = error instanceof Error ? error.message : 'An error occurred';
+        return { error: message };
+      }
+    },
+    onSuccess: () => {
+      // Additional success actions can be added here if needed
+    },
   });
 
-  const handleFileSelected = (file: File | null, type: 'avatar' | 'cover') => {
-    if (type === 'avatar') {
+  const handleFileSelected = (file: File | null, uploadType: 'avatar' | 'cover') => {
+    if (uploadType === 'avatar') {
       setSelectedAvatarFile(file);
     } else {
       setSelectedCoverFile(file);
     }
   };
 
-  const onSubmit = handleSubmit(async textData => {
-    let imagesUpdated = false;
-    let textDataUpdateSkipped = false;
-
-    if (selectedAvatarFile || selectedCoverFile) {
-      setIsUploadingImages(true);
-      try {
-        if (selectedAvatarFile) {
-          const formData = new FormData();
-          formData.append('file', selectedAvatarFile);
-          formData.append('uploadType', 'avatar');
-          const response = await fetch('/api/profile/image-upload', {
-            method: 'POST',
-            body: formData,
-          });
-          const result = await response.json();
-          if (!response.ok) throw new Error(result.error || 'Failed to upload avatar.');
-          success('Avatar updated!');
-          setCurrentAvatarUrl(result.imageUrl);
-          setSelectedAvatarFile(null);
-          imagesUpdated = true;
-        }
-        if (selectedCoverFile) {
-          const formData = new FormData();
-          formData.append('file', selectedCoverFile);
-          formData.append('uploadType', 'cover');
-          const response = await fetch('/api/profile/image-upload', {
-            method: 'POST',
-            body: formData,
-          });
-          const result = await response.json();
-          if (!response.ok) throw new Error(result.error || 'Failed to upload cover image.');
-          success('Cover image updated!');
-          setCurrentCoverUrl(result.imageUrl);
-          setSelectedCoverFile(null);
-          imagesUpdated = true;
-        }
-      } catch (e: unknown) {
-        const errorMessage =
-          e instanceof Error ? e.message : 'An error occurred during image upload.';
-        toastError(errorMessage, 'Image Upload Failed');
-        setIsUploadingImages(false);
-        return;
-      } finally {
-        setIsUploadingImages(false);
-      }
-    }
-
-    // Only proceed to update text data if there are changes
-    if (isDirty) {
-      const result = await updateProfile(textData);
-      if (result.success) {
-        success('Profile details updated successfully!', 'Profile Updated');
-      } else if (result.error) {
-        toastError(result.error, 'Profile Update Failed');
-      }
-    } else if (imagesUpdated && !isDirty) {
-      textDataUpdateSkipped = true;
-    }
-
-    if (!imagesUpdated && !isDirty && !textDataUpdateSkipped) {
-      toastError('No changes to save.', 'No Changes');
-    }
-  });
-
-  const isLoading = isUploadingImages || isUpdatingProfileText || isSubmitting;
+  const isLoading = form.isLoading || isUpdatingProfileText || isUploadingImages;
 
   return (
-    <Box style={{ backgroundColor: 'var(--gray-1)' }}>
-      <Container size="3" py="6">
-        <Flex align="center" gap="3" mb="5">
-          <Link href="/profile" passHref>
-            <Button variant="ghost" color="gray">
-              <ArrowLeftIcon />
-              Back to Profile
-            </Button>
-          </Link>
-          <Badge size="2">Editing Profile</Badge>
-        </Flex>
-
-        <Heading size="8" mb="6">
-          Edit Your Profile
-        </Heading>
-
-        <form onSubmit={onSubmit}>
-          <Tabs.Root defaultValue="images">
-            <Tabs.List>
-              <Tabs.Trigger value="images">
-                <Share1Icon width="16" height="16" />
-                <Text ml="1">Images</Text>
-              </Tabs.Trigger>
-              <Tabs.Trigger value="personal">
-                <PersonIcon width="16" height="16" />
-                <Text ml="1">Personal Info</Text>
-              </Tabs.Trigger>
-              <Tabs.Trigger value="location">
-                <SewingPinIcon width="16" height="16" />
-                <Text ml="1">Location</Text>
-              </Tabs.Trigger>
-              <Tabs.Trigger value="bio">
-                <ReaderIcon width="16" height="16" />
-                <Text ml="1">Bio & Background</Text>
-              </Tabs.Trigger>
-              <Tabs.Trigger value="social">
-                <GlobeIcon width="16" height="16" />
-                <Text ml="1">Social Links</Text>
-              </Tabs.Trigger>
-            </Tabs.List>
-
-            <Box pt="5">
-              {/* IMAGES TAB */}
-              <Tabs.Content value="images">
-                <Card size="2">
-                  <Flex direction="column" gap="4">
-                    <Heading size="4">Profile Images</Heading>
-                    <Text size="2" color="gray">
-                      Upload images that represent you. Your avatar will be shown across the
-                      platform.
-                    </Text>
-
-                    <Grid columns={{ initial: '1', sm: '2' }} gap="5">
-                      <Box>
-                        <Text size="2" weight="medium" mb="2">
-                          Avatar Image
-                        </Text>
-                        <Tooltip content="This will be displayed on your profile and in comments">
-                          <FileUploadArea
-                            label="Avatar"
-                            currentImageUrl={currentAvatarUrl}
-                            onFileSelect={handleFileSelected}
-                            uploadType="avatar"
-                            maxFileSizeMB={MAX_AVATAR_SIZE_BYTES / 1024 / 1024}
-                            aspectRatio="1 / 1"
-                            fallbackText={initialData?.full_name?.[0] || '?'}
-                          />
-                        </Tooltip>
-                      </Box>
-
-                      <Box>
-                        <Text size="2" weight="medium" mb="2">
-                          Cover Image
-                        </Text>
-                        <Tooltip content="This will be displayed at the top of your profile page">
-                          <FileUploadArea
-                            label="Cover Image"
-                            currentImageUrl={currentCoverUrl}
-                            onFileSelect={handleFileSelected}
-                            uploadType="cover"
-                            maxFileSizeMB={MAX_COVER_SIZE_BYTES / 1024 / 1024}
-                            aspectRatio="16 / 9"
-                          />
-                        </Tooltip>
-                      </Box>
-                    </Grid>
-
-                    {(selectedAvatarFile || selectedCoverFile) && (
-                      <Button type="submit" disabled={isLoading} color="green">
-                        {isUploadingImages && <Spinner mr="2" />}
-                        Save Image Changes
-                      </Button>
-                    )}
-                  </Flex>
-                </Card>
-              </Tabs.Content>
-
-              {/* PERSONAL INFO TAB */}
-              <Tabs.Content value="personal">
-                <Card size="2">
-                  <Flex direction="column" gap="4">
-                    <Heading size="4">Personal Information</Heading>
-                    <Text size="2" color="gray">
-                      This information will be displayed publicly so be careful what you share.
-                    </Text>
-
-                    <Grid columns={{ initial: '1', sm: '2' }} gap="4">
-                      <StyledInput
-                        id="full_name"
-                        placeholder="Your full name"
-                        register={register}
-                        error={errors.full_name}
-                        disabled={isLoading}
-                        icon={PersonIcon}
-                        label="Full Name"
-                      />
-
-                      <StyledInput
-                        id="nickname"
-                        placeholder="Your nickname/username"
-                        register={register}
-                        error={errors.nickname}
-                        disabled={isLoading}
-                        icon={PersonIcon}
-                        label="Nickname (username)"
-                      />
-                    </Grid>
-                  </Flex>
-                </Card>
-              </Tabs.Content>
-
-              {/* LOCATION TAB */}
-              <Tabs.Content value="location">
-                <Card size="2">
-                  <Flex direction="column" gap="4">
-                    <Heading size="4">Location Information</Heading>
-                    <Text size="2" color="gray">
-                      Share your location to connect with local communities and events.
-                    </Text>
-
-                    <Grid columns={{ initial: '1', sm: '2' }} gap="4">
-                      <StyledInput
-                        id="country"
-                        placeholder="Your country"
-                        register={register}
-                        error={errors.country}
-                        disabled={isLoading}
-                        icon={HomeIcon}
-                        label="Country"
-                      />
-
-                      <StyledInput
-                        id="city"
-                        placeholder="Your city"
-                        register={register}
-                        error={errors.city}
-                        disabled={isLoading}
-                        icon={SewingPinIcon}
-                        label="City"
-                      />
-                    </Grid>
-                  </Flex>
-                </Card>
-              </Tabs.Content>
-
-              {/* BIO TAB */}
-              <Tabs.Content value="bio">
-                <Card size="2">
-                  <Flex direction="column" gap="4">
-                    <Heading size="4">Bio & Professional Background</Heading>
-                    <Text size="2" color="gray">
-                      Tell others about yourself and your professional experience.
-                    </Text>
-
-                    <StyledTextArea
-                      id="bio"
-                      placeholder="Tell us about yourself"
-                      register={register}
-                      error={errors.bio}
-                      disabled={isLoading}
-                      label="Bio (short introduction about yourself)"
-                      rows={4}
-                    />
-
-                    <StyledTextArea
-                      id="professional_background"
-                      placeholder="Your professional experience and skills"
-                      register={register}
-                      error={errors.professional_background}
-                      disabled={isLoading}
-                      label="Professional Background"
-                      rows={5}
-                    />
-
-                    <StyledInput
-                      id="startup_ecosystem_role"
-                      placeholder="e.g., Founder, Investor, Mentor"
-                      register={register}
-                      error={errors.startup_ecosystem_role}
-                      disabled={isLoading}
-                      label="Startup Ecosystem Role"
-                    />
-                  </Flex>
-                </Card>
-              </Tabs.Content>
-
-              {/* SOCIAL LINKS TAB */}
-              <Tabs.Content value="social">
-                <Card size="2">
-                  <Flex direction="column" gap="4">
-                    <Heading size="4">Social Media Links</Heading>
-                    <Text size="2" color="gray">
-                      Connect your social profiles to share your presence across platforms.
-                    </Text>
-
-                    <StyledInput
-                      id="website_url"
-                      placeholder="https://example.com"
-                      register={register}
-                      error={errors.website_url}
-                      disabled={isLoading}
-                      icon={GlobeIcon}
-                      label="Website URL"
-                    />
-
-                    <Grid columns={{ initial: '1', sm: '3' }} gap="4">
-                      <StyledInput
-                        id="x_username"
-                        placeholder="Without @ symbol"
-                        register={register}
-                        error={errors.x_username}
-                        disabled={isLoading}
-                        label="X / Twitter"
-                      />
-
-                      <StyledInput
-                        id="linkedin_username"
-                        placeholder="LinkedIn username"
-                        register={register}
-                        error={errors.linkedin_username}
-                        disabled={isLoading}
-                        label="LinkedIn Username"
-                      />
-
-                      <StyledInput
-                        id="github_username"
-                        placeholder="GitHub username"
-                        register={register}
-                        error={errors.github_username}
-                        disabled={isLoading}
-                        label="GitHub Username"
-                      />
-                    </Grid>
-                  </Flex>
-                </Card>
-              </Tabs.Content>
-            </Box>
-          </Tabs.Root>
-
-          <Separator my="5" size="4" />
-
-          <Flex justify="between" gap="4" mt="6">
-            <Link href="/profile" passHref>
-              <Button size="3" variant="soft" color="gray" disabled={isLoading}>
-                <Cross2Icon />
-                Cancel
+    <Container size="2" p="4">
+      <Card variant="surface" style={{ maxWidth: '800px', margin: '0 auto' }}>
+        <Box p="6">
+          <Flex justify="between" align="center" mb="6">
+            <Heading size="6">Edit Profile</Heading>
+            <Link href="/profile">
+              <Button variant="ghost" size="2">
+                <ArrowLeftIcon width="16" height="16" />
+                Back to Profile
               </Button>
             </Link>
-            <Button size="3" type="submit" disabled={isLoading} color="blue">
-              {isLoading && <Spinner mr="2" />}
-              <CheckIcon />
-              {isUploadingImages
-                ? 'Uploading Images...'
-                : isUpdatingProfileText
-                  ? 'Saving Profile...'
-                  : 'Save All Changes'}
-            </Button>
           </Flex>
-        </form>
-      </Container>
-    </Box>
+
+          <Tabs.Root defaultValue="basic" className="w-full">
+            <Tabs.List>
+              <Tabs.Trigger value="basic">Basic Information</Tabs.Trigger>
+              <Tabs.Trigger value="professional">Professional</Tabs.Trigger>
+              <Tabs.Trigger value="social">Social Links</Tabs.Trigger>
+              <Tabs.Trigger value="images">Images</Tabs.Trigger>
+            </Tabs.List>
+
+            <form onSubmit={form.handleSubmit}>
+              <Tabs.Content value="basic" className="mt-6">
+                <Grid columns="1" gap="4">
+                  <StyledInput
+                    id="full_name"
+                    label="Full Name"
+                    placeholder="Your full name"
+                    register={form.register('full_name')}
+                    error={form.formState.errors.full_name}
+                    disabled={isLoading}
+                    icon={PersonIcon}
+                    required
+                  />
+
+                  <StyledInput
+                    id="nickname"
+                    label="Nickname"
+                    placeholder="Your preferred nickname"
+                    register={form.register('nickname')}
+                    error={form.formState.errors.nickname}
+                    disabled={isLoading}
+                    icon={PersonIcon}
+                    required
+                  />
+
+                  <StyledTextArea
+                    id="bio"
+                    label="Bio"
+                    placeholder="Tell us about yourself..."
+                    register={form.register('bio')}
+                    error={form.formState.errors.bio}
+                    disabled={isLoading}
+                    rows={4}
+                    maxLength={500}
+                    showCharCount
+                  />
+
+                  <Grid columns="2" gap="4">
+                    <StyledInput
+                      id="country"
+                      label="Country"
+                      placeholder="Your country"
+                      register={form.register('country')}
+                      error={form.formState.errors.country}
+                      disabled={isLoading}
+                      icon={SewingPinIcon}
+                    />
+
+                    <StyledInput
+                      id="city"
+                      label="City"
+                      placeholder="Your city"
+                      register={form.register('city')}
+                      error={form.formState.errors.city}
+                      disabled={isLoading}
+                      icon={HomeIcon}
+                    />
+                  </Grid>
+                </Grid>
+              </Tabs.Content>
+
+              <Tabs.Content value="professional" className="mt-6">
+                <Grid columns="1" gap="4">
+                  <StyledTextArea
+                    id="professional_background"
+                    label="Professional Background"
+                    placeholder="Describe your professional experience..."
+                    register={form.register('professional_background')}
+                    error={form.formState.errors.professional_background}
+                    disabled={isLoading}
+                    rows={4}
+                    maxLength={1000}
+                    showCharCount
+                  />
+
+                  <StyledTextArea
+                    id="startup_ecosystem_role"
+                    label="Role in Startup Ecosystem"
+                    placeholder="Your role in the startup ecosystem..."
+                    register={form.register('startup_ecosystem_role')}
+                    error={form.formState.errors.startup_ecosystem_role}
+                    disabled={isLoading}
+                    rows={3}
+                    maxLength={500}
+                    showCharCount
+                  />
+                </Grid>
+              </Tabs.Content>
+
+              <Tabs.Content value="social" className="mt-6">
+                <Grid columns="1" gap="4">
+                  <StyledInput
+                    id="website_url"
+                    label="Website"
+                    type="url"
+                    placeholder="https://your-website.com"
+                    register={form.register('website_url')}
+                    error={form.formState.errors.website_url}
+                    disabled={isLoading}
+                    icon={GlobeIcon}
+                  />
+
+                  <Grid columns="1" gap="4">
+                    <StyledInput
+                      id="x_username"
+                      label="X (Twitter) Username"
+                      placeholder="username"
+                      register={form.register('x_username')}
+                      error={form.formState.errors.x_username}
+                      disabled={isLoading}
+                      icon={Share1Icon}
+                    />
+
+                    <StyledInput
+                      id="linkedin_username"
+                      label="LinkedIn Username"
+                      placeholder="username"
+                      register={form.register('linkedin_username')}
+                      error={form.formState.errors.linkedin_username}
+                      disabled={isLoading}
+                      icon={Share1Icon}
+                    />
+
+                    <StyledInput
+                      id="github_username"
+                      label="GitHub Username"
+                      placeholder="username"
+                      register={form.register('github_username')}
+                      error={form.formState.errors.github_username}
+                      disabled={isLoading}
+                      icon={Share1Icon}
+                    />
+                  </Grid>
+                </Grid>
+              </Tabs.Content>
+
+              <Tabs.Content value="images" className="mt-6">
+                <Grid columns="1" gap="6">
+                  <FileUploadArea
+                    label="Profile Avatar"
+                    currentImageUrl={currentAvatarUrl}
+                    onFileSelect={handleFileSelected}
+                    uploadType="avatar"
+                    maxFileSizeMB={Math.round(MAX_AVATAR_SIZE_BYTES / 1024 / 1024)}
+                    aspectRatio="1 / 1"
+                    fallbackText={initialData?.full_name || 'U'}
+                  />
+                  {selectedAvatarFile && (
+                    <Flex align="center" gap="2">
+                      <CheckIcon color="green" />
+                      <Text size="2" color="green">
+                        {selectedAvatarFile.name} selected
+                      </Text>
+                    </Flex>
+                  )}
+
+                  <Separator size="4" />
+
+                  <FileUploadArea
+                    label="Cover Image"
+                    currentImageUrl={currentCoverUrl}
+                    onFileSelect={handleFileSelected}
+                    uploadType="cover"
+                    maxFileSizeMB={Math.round(MAX_COVER_SIZE_BYTES / 1024 / 1024)}
+                    aspectRatio="16 / 9"
+                    fallbackText="Cover"
+                  />
+                  {selectedCoverFile && (
+                    <Flex align="center" gap="2">
+                      <CheckIcon color="green" />
+                      <Text size="2" color="green">
+                        {selectedCoverFile.name} selected
+                      </Text>
+                    </Flex>
+                  )}
+                </Grid>
+              </Tabs.Content>
+
+              <Separator size="4" style={{ margin: '24px 0' }} />
+
+              <Flex justify="between" align="center">
+                <Flex gap="3">
+                  <Link href="/profile">
+                    <Button variant="soft" disabled={isLoading}>
+                      Cancel
+                    </Button>
+                  </Link>
+                  <Button type="submit" disabled={isLoading}>
+                    {isLoading ? (
+                      <Flex align="center" gap="2">
+                        <Spinner size="1" />
+                        Saving...
+                      </Flex>
+                    ) : (
+                      'Save Changes'
+                    )}
+                  </Button>
+                </Flex>
+              </Flex>
+            </form>
+          </Tabs.Root>
+        </Box>
+      </Card>
+    </Container>
   );
 }

@@ -1,29 +1,18 @@
-import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/client';
-
-interface RouteContext {
-  params: Promise<{
-    id: string;
-  }>;
-}
+import { NextRequest } from 'next/server';
+import { createAPIHandlerWithParams } from '@/lib/api/base-handler';
+import { requireAuth } from '@/lib/api/middleware/auth';
+import { SupabaseClientFactory } from '@/lib/supabase/client-factory';
 
 /**
  * GET /api/projects/[id]/permissions/user
  * Get the current user's role in the project
  */
-export async function GET(request: Request, { params }: RouteContext) {
-  const supabase = await createSupabaseServerClient();
+export const GET = createAPIHandlerWithParams(async (request: NextRequest, params) => {
+  // Require authentication
+  const user = await requireAuth();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { id: projectId } = await params;
+  const { id: projectId } = params;
+  const supabase = await SupabaseClientFactory.getServerClient();
 
   // Get the current user's permissions for this project
   const { data, error } = await supabase
@@ -35,11 +24,12 @@ export async function GET(request: Request, { params }: RouteContext) {
 
   if (error) {
     if (error.code === 'PGRST116') {
-      // No permission found
-      return NextResponse.json({ data: null });
+      // No permission found - user has no access to this project
+      return { data: null };
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('Error fetching user permissions:', error);
+    throw new Error('Failed to fetch user permissions');
   }
 
-  return NextResponse.json({ data });
-}
+  return { data };
+});

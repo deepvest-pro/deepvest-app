@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AUTH_PROVIDERS, type AuthProvider } from '@/lib/supabase/config';
 
 export const signInSchema = z.object({
   email: z.string().email('Please enter a valid email'),
@@ -57,9 +58,31 @@ export const profileUpdateSchema = z.object({
   github_username: z.string().max(50, 'Maximum length is 50 characters').optional().nullable(),
 });
 
+// API schemas for auth endpoints
+export const oauthProviderSchema = z.object({
+  provider: z.enum(Object.values(AUTH_PROVIDERS) as [AuthProvider, ...AuthProvider[]], {
+    errorMap: () => ({ message: 'Invalid authentication provider' }),
+  }),
+});
+
+export const authCallbackSchema = z.object({
+  code: z.string().min(1, 'Authorization code is required'),
+});
+
+export const emailConfirmSchema = z.object({
+  token_hash: z.string().min(1, 'Token hash is required'),
+  type: z.enum(['signup', 'invite', 'magiclink', 'recovery', 'email_change'], {
+    errorMap: () => ({ message: 'Invalid email confirmation type' }),
+  }),
+  next: z.string().optional(),
+});
+
 // Types based on Zod schemas
 export type SignInCredentials = z.infer<typeof signInSchema>;
 export type SignUpCredentials = z.infer<typeof signUpSchema>;
 export type ResetPasswordRequest = z.infer<typeof resetPasswordSchema>;
 export type UpdatePasswordRequest = z.infer<typeof updatePasswordSchema>;
 export type ProfileUpdateData = z.infer<typeof profileUpdateSchema>;
+export type OAuthProviderRequest = z.infer<typeof oauthProviderSchema>;
+export type AuthCallbackRequest = z.infer<typeof authCallbackSchema>;
+export type EmailConfirmRequest = z.infer<typeof emailConfirmSchema>;

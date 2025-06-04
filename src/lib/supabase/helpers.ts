@@ -9,7 +9,9 @@ import type {
   ProjectScoring,
   SnapshotWithAuthorAndScoring,
 } from '@/types/supabase';
-import { createSupabaseServerClient, getCurrentUser } from './client';
+import { getCurrentUser } from './client';
+import { SupabaseClientFactory } from './client-factory';
+import { REGEX_PATTERNS } from '@/lib/constants';
 
 /**
  * Helper function to fetch and construct snapshot with expanded author
@@ -17,7 +19,7 @@ import { createSupabaseServerClient, getCurrentUser } from './client';
 async function fetchAndProcessSnapshot(
   snapshotId: UUID,
 ): Promise<SnapshotWithAuthorAndScoring | null> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await SupabaseClientFactory.getServerClient();
   let snapshotData: SnapshotWithAuthorAndScoring | null = null;
 
   // Fetch raw snapshot data first (both for authenticated and guest users)
@@ -88,7 +90,7 @@ async function fetchAndProcessSnapshot(
  * Fetches a project by ID with permissions and snapshots
  */
 export async function getProjectWithDetails(projectId: string) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await SupabaseClientFactory.getServerClient();
   const user = await getCurrentUser();
 
   // Fetch the project
@@ -198,7 +200,7 @@ export async function getUserProjects(userId: string | undefined) {
     return { data: null, error: 'User ID is required' };
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = await SupabaseClientFactory.getServerClient();
 
   // First get the user's project permissions
   const { data: permissions, error: permissionsError } = await supabase
@@ -252,7 +254,7 @@ export async function getUserProjects(userId: string | undefined) {
  * - User's own projects (if authenticated)
  */
 export async function getAllVisibleProjects(userId?: string) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await SupabaseClientFactory.getServerClient();
 
   try {
     if (!userId) {
@@ -362,7 +364,7 @@ export async function checkUserProjectRole(
 ) {
   if (!userId) return false;
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = await SupabaseClientFactory.getServerClient();
 
   // Determine the hierarchy of roles
   const roleHierarchy: Record<ProjectRole, number> = {
@@ -398,7 +400,7 @@ export async function createNewProject(
   description: string,
   status: string,
 ) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await SupabaseClientFactory.getServerClient();
 
   // Use the database function to create a project with proper permissions
   const { data, error } = await supabase.rpc('create_project', {
@@ -424,9 +426,8 @@ export async function isSlugAvailable(
   slug: string,
 ): Promise<{ available: boolean; error?: string }> {
   try {
-    // Validate slug format
-    const slugRegex = /^[a-z0-9-]+$/;
-    if (!slugRegex.test(slug)) {
+    // Validate slug format using centralized regex
+    if (!REGEX_PATTERNS.projectSlug.test(slug)) {
       return {
         available: false,
         error: 'Slug can only contain lowercase letters, numbers, and hyphens',
@@ -442,7 +443,7 @@ export async function isSlugAvailable(
 
     // Check if slug is already taken
     try {
-      const supabase = await createSupabaseServerClient();
+      const supabase = await SupabaseClientFactory.getServerClient();
 
       // Verify supabase client was created successfully
       if (!supabase) {
@@ -493,7 +494,7 @@ export async function updateProject(
   projectId: string,
   updates: Partial<Omit<Project, 'id' | 'created_at' | 'updated_at'>>,
 ) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await SupabaseClientFactory.getServerClient();
 
   const { data, error } = await supabase
     .from('projects')
@@ -516,7 +517,7 @@ export async function createNewSnapshot(
   projectId: string,
   snapshotData: Omit<Snapshot, 'id' | 'created_at' | 'updated_at'>,
 ) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await SupabaseClientFactory.getServerClient();
 
   // First, get the current highest version number
   const { data: versionData, error: versionError } = await supabase
@@ -566,7 +567,7 @@ export async function createNewSnapshot(
  * Publishes a snapshot (sets it as the public snapshot)
  */
 export async function publishSnapshot(projectId: string, snapshotId: string) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await SupabaseClientFactory.getServerClient();
 
   // First lock the snapshot
   const { error: lockError } = await supabase
@@ -600,7 +601,7 @@ export async function publishSnapshot(projectId: string, snapshotId: string) {
  * Adds a user to a project by user ID (not email)
  */
 export async function addUserToProjectById(projectId: string, userId: string, role: ProjectRole) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await SupabaseClientFactory.getServerClient();
 
   // Check if the user already has a role in this project
   const { data: existingRole, error: roleError } = await supabase
@@ -644,7 +645,7 @@ export async function addUserToProjectById(projectId: string, userId: string, ro
  * Removes a user from a project
  */
 export async function removeUserFromProject(projectId: string, userId: string) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await SupabaseClientFactory.getServerClient();
 
   // Check if the user is the owner
   const { data: isOwner, error: ownerCheckError } = await supabase
@@ -681,7 +682,7 @@ export async function removeUserFromProject(projectId: string, userId: string) {
  * Updates a user's role in a project
  */
 export async function updateUserRole(projectId: string, userId: string, newRole: ProjectRole) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await SupabaseClientFactory.getServerClient();
 
   // Check if the user is the owner and trying to change their role
   if (newRole !== 'owner') {
@@ -720,7 +721,7 @@ export async function updateUserRole(projectId: string, userId: string, newRole:
  * Updates the contents array in the current snapshot when documents are modified
  */
 export async function updateSnapshotContents(projectId: string) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await SupabaseClientFactory.getServerClient();
 
   // Get the current project to find the new_snapshot_id
   const { data: project, error: projectError } = await supabase
@@ -803,7 +804,7 @@ export async function getProjectCoreStatus(projectId: string): Promise<{
   data: { is_public: boolean; is_archived: boolean }[] | null;
   error: string | null;
 }> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await SupabaseClientFactory.getServerClient();
   const { data, error } = await supabase.rpc('get_project_status_by_id', {
     p_project_id: projectId,
   });
@@ -840,7 +841,7 @@ export async function getProjectCoreStatus(projectId: string): Promise<{
  * Adds a user to a project with a specific role (by email)
  */
 export async function addUserToProject(projectId: string, userEmail: string, role: ProjectRole) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await SupabaseClientFactory.getServerClient();
 
   // First, find the user by email
   const { data: userData, error: userError } = await supabase
@@ -861,7 +862,7 @@ export async function addUserToProject(projectId: string, userEmail: string, rol
  * Deletes all files in a project folder from storage
  */
 export async function deleteProjectFiles(projectId: string) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await SupabaseClientFactory.getServerClient();
 
   try {
     // Helper function to recursively list all files in a folder
@@ -944,7 +945,7 @@ export async function deleteProjectFiles(projectId: string) {
  * Get public documents for a project
  */
 export async function getPublicProjectDocuments(projectId: string) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await SupabaseClientFactory.getServerClient();
 
   // Build query for public documents only
   const { data: documents, error } = await supabase
@@ -984,7 +985,7 @@ export async function getPublicProjectDocuments(projectId: string) {
  * Get public team members for a project
  */
 export async function getPublicProjectTeamMembers(projectId: string) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await SupabaseClientFactory.getServerClient();
 
   // Build query for active team members (public by default)
   const { data, error } = await supabase
@@ -1001,4 +1002,47 @@ export async function getPublicProjectTeamMembers(projectId: string) {
   }
 
   return { data: data || [], error: null };
+}
+
+/**
+ * Fetches leaderboard projects for SSR
+ * Uses the same database function as the API but returns server-side
+ */
+export async function getLeaderboardProjects(options?: {
+  limit?: number;
+  offset?: number;
+  minScore?: number;
+}) {
+  const supabase = await SupabaseClientFactory.getServerClient();
+
+  const { limit = 20, offset = 0, minScore } = options || {};
+
+  try {
+    // Use the existing get_scoring_leaderboard function
+    const { data, error } = await supabase.rpc('get_scoring_leaderboard', {
+      p_limit: limit,
+      p_offset: offset,
+      p_min_score: minScore || null,
+    });
+
+    if (error) {
+      console.error('Leaderboard query error:', error);
+      return { data: null, error: error.message };
+    }
+
+    return {
+      data: {
+        projects: data || [],
+        pagination: {
+          limit,
+          offset,
+          hasMore: (data?.length || 0) === limit,
+        },
+      },
+      error: null,
+    };
+  } catch (err) {
+    console.error('Error in getLeaderboardProjects:', err);
+    return { data: null, error: 'Failed to fetch leaderboard data' };
+  }
 }

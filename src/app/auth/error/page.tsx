@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { AuthError } from '@/components/auth/auth-error';
 
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function AuthErrorPage() {
-  return <AuthError />;
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <AuthError />
+    </Suspense>
+  );
 }

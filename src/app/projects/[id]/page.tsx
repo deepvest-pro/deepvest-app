@@ -7,8 +7,9 @@ import {
 } from '@/lib/supabase/helpers';
 import { getCurrentUser } from '@/lib/supabase/client';
 import { checkUserProjectRole, getProjectCoreStatus } from '@/lib/supabase/helpers';
+import type { ProjectDocumentWithAuthor } from '@/lib/supabase/repositories/project-documents';
 import { ProjectContent } from '@/components/projects/ProjectContent';
-import { ProjectContentWithAuthor, TeamMember } from '@/types/supabase';
+import { TeamMember } from '@/types/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,18 +48,9 @@ export default async function ProjectPage({ params: paramsPromise }: ProjectPage
   const { id } = params;
   const user = await getCurrentUser();
 
-  // 1. Check project existence and public status using the helper function
   const { data: projectStatusArray, error: rpcError } = await getProjectCoreStatus(id);
 
   if (rpcError || !projectStatusArray || projectStatusArray.length === 0) {
-    console.error(
-      '[ProjectPage] RPC error or project not found via RPC. Project ID:',
-      id,
-      'RPC Error:',
-      rpcError,
-      'Status Result:',
-      projectStatusArray,
-    );
     notFound();
   }
 
@@ -76,7 +68,6 @@ export default async function ProjectPage({ params: paramsPromise }: ProjectPage
     );
   }
 
-  // 2. If project is not public and user is a guest, show "temporarily unavailable"
   if (!isPublic && !user) {
     return (
       <div className="container mx-auto my-10 flex flex-col items-center justify-center text-center">
@@ -89,16 +80,9 @@ export default async function ProjectPage({ params: paramsPromise }: ProjectPage
     );
   }
 
-  // 3. If project is public OR user is authenticated, proceed to fetch full details
   const { data: project, error } = await getProjectWithDetails(id);
 
   if (error || !project) {
-    console.error(
-      '[ProjectPage] Error fetching project details after RPC check or project is null. Project ID:',
-      id,
-      'Error:',
-      error,
-    );
     if (user) {
       return (
         <div className="container mx-auto my-10 flex flex-col items-center justify-center text-center">
@@ -108,10 +92,9 @@ export default async function ProjectPage({ params: paramsPromise }: ProjectPage
         </div>
       );
     }
-    notFound(); // Should not happen if RPC worked and project is public.
+    notFound();
   }
 
-  // 4. Check user's role for the project if authenticated
   let userRole = null;
   if (user) {
     const hasAccess = await checkUserProjectRole(user.id, id, 'viewer');
@@ -133,15 +116,36 @@ export default async function ProjectPage({ params: paramsPromise }: ProjectPage
     }
   }
 
-  // 5. Get documents and team data
-  const { data: documents }: { data: ProjectContentWithAuthor[] | null } =
-    await getPublicProjectDocuments(id);
+  const { data: documentsData } = await getPublicProjectDocuments(id);
   const { data: team }: { data: TeamMember[] | null } = await getPublicProjectTeamMembers(id);
+
+  // Convert ProjectContentWithAuthor to ProjectDocumentWithAuthor
+  const documents: ProjectDocumentWithAuthor[] = (documentsData || []).map(doc => ({
+    id: doc.id,
+    project_id: doc.project_id,
+    title: doc.title,
+    slug: doc.slug,
+    content_type: doc.content_type,
+    content: doc.content,
+    description: doc.description,
+    file_urls: doc.file_urls,
+    author_id: doc.author_id,
+    is_public: doc.is_public,
+    created_at: doc.created_at,
+    updated_at: doc.updated_at,
+    deleted_at: doc.deleted_at,
+    author: doc.author
+      ? {
+          id: doc.author.id,
+          full_name: doc.author.full_name || '',
+        }
+      : null,
+  }));
 
   return (
     <ProjectContent
       project={project}
-      documents={documents || []}
+      documents={documents}
       team={team || []}
       isAuthenticated={!!user}
       userId={user?.id}

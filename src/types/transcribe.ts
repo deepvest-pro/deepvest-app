@@ -12,20 +12,16 @@ export interface TranscribeRequest {
  * Response from the transcription API endpoint
  */
 export interface TranscribeResponse {
-  /** Whether the transcription was successful */
-  success: boolean;
-  /** The transcription result if successful */
-  result?: string;
-  /** Error message if the transcription failed */
-  error?: string;
+  /** The transcription result */
+  result: string;
   /** Additional metadata about the transcription */
   metadata?: {
     /** Size of the processed file in bytes */
     fileSize?: number;
     /** MIME type of the processed file */
     mimeType?: string;
-    /** Processing time in milliseconds */
-    processingTime?: number;
+    /** AI model used for transcription */
+    model?: string;
   };
 }
 

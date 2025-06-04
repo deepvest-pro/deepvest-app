@@ -1,178 +1,141 @@
-import { NextResponse } from 'next/server';
-import { z } from 'zod';
+import { NextRequest } from 'next/server';
+import { createAPIHandlerWithParams } from '@/lib/api/base-handler';
+import { APIError, requireAuth } from '@/lib/api/middleware/auth';
+import { ValidationSchemas } from '@/lib/validations';
 import { checkUserProjectRole } from '@/lib/supabase/helpers';
-import { createSupabaseServerClient } from '@/lib/supabase/client';
-import { bulkTeamMemberSchema } from '@/lib/validations/team';
+import { SupabaseClientFactory } from '@/lib/supabase/client-factory';
 import { syncSnapshotData } from '@/lib/utils/snapshot-sync';
-
-interface RouteContext {
-  params: Promise<{
-    id: string;
-  }>;
-}
 
 /**
  * POST /api/projects/[id]/team-members/bulk
  * Perform bulk operations on team members
  */
-export async function POST(request: Request, { params }: RouteContext) {
-  const supabase = await createSupabaseServerClient();
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { id: projectId } = await params;
+export const POST = createAPIHandlerWithParams(async (request: NextRequest, params) => {
+  const user = await requireAuth();
+  const { id: projectId } = params;
 
   // Check if user has permission to manage team members (editor, admin, or owner)
   const hasAccess = await checkUserProjectRole(user.id, projectId, 'editor');
 
   if (!hasAccess) {
-    return NextResponse.json(
-      { error: 'You do not have permission to manage team members for this project' },
-      { status: 403 },
-    );
+    throw new APIError('You do not have permission to manage team members for this project', 403);
   }
 
-  try {
-    const json = await request.json();
+  const body = await request.json();
 
-    // Validate the request body
-    const { team_member_ids, action } = bulkTeamMemberSchema.parse(json);
+  // Validate the request body
+  const { team_member_ids, action } = ValidationSchemas.team.bulk.parse(body);
 
-    // Get user's role to check permissions for different actions
-    const { data: userRole } = await supabase
-      .from('project_permissions')
-      .select('role')
-      .eq('project_id', projectId)
-      .eq('user_id', user.id)
-      .single();
+  const supabase = await SupabaseClientFactory.getServerClient();
 
-    const isAdminOrOwner = userRole && ['admin', 'owner'].includes(userRole.role);
+  // Get user's role to check permissions for different actions
+  const { data: userRole } = await supabase
+    .from('project_permissions')
+    .select('role')
+    .eq('project_id', projectId)
+    .eq('user_id', user.id)
+    .single();
 
-    // Verify all team members exist and user has permission to modify them
-    const { data: existingMembers, error: fetchError } = await supabase
-      .from('team_members')
-      .select('id, author_id')
-      .eq('project_id', projectId)
-      .in('id', team_member_ids)
-      .is('deleted_at', null);
+  const isAdminOrOwner = userRole && ['admin', 'owner'].includes(userRole.role);
 
-    if (fetchError) {
-      console.error('Error fetching team members:', fetchError);
-      return NextResponse.json({ error: 'Failed to fetch team members' }, { status: 500 });
-    }
+  // Verify all team members exist and user has permission to modify them
+  const { data: existingMembers, error: fetchError } = await supabase
+    .from('team_members')
+    .select('id, author_id')
+    .eq('project_id', projectId)
+    .in('id', team_member_ids)
+    .is('deleted_at', null);
 
-    if (!existingMembers || existingMembers.length !== team_member_ids.length) {
-      return NextResponse.json({ error: 'Some team members not found' }, { status: 404 });
-    }
-
-    // Check permissions for each team member
-    const unauthorizedMembers = existingMembers.filter(
-      member => member.author_id !== user.id && !isAdminOrOwner,
-    );
-
-    if (unauthorizedMembers.length > 0) {
-      return NextResponse.json(
-        { error: 'Insufficient permissions for some team members' },
-        { status: 403 },
-      );
-    }
-
-    const updateData: Record<string, string | null> = {
-      updated_at: new Date().toISOString(),
-    };
-
-    // Prepare update data based on action
-    switch (action) {
-      case 'delete':
-        // Check if any team members are referenced in locked snapshots
-        const { data: lockedSnapshots, error: snapshotError } = await supabase
-          .from('snapshots')
-          .select('id, team_members')
-          .eq('project_id', projectId)
-          .eq('is_locked', true);
-
-        if (snapshotError) {
-          console.error('Error checking locked snapshots:', snapshotError);
-          return NextResponse.json(
-            { error: 'Failed to check snapshot references' },
-            { status: 500 },
-          );
-        }
-
-        if (lockedSnapshots && lockedSnapshots.length > 0) {
-          const referencedMembers = lockedSnapshots.some(snapshot =>
-            snapshot.team_members?.some((memberId: string) => team_member_ids.includes(memberId)),
-          );
-
-          if (referencedMembers) {
-            return NextResponse.json(
-              { error: 'Cannot delete team members: some are referenced in locked snapshots' },
-              { status: 409 },
-            );
-          }
-        }
-
-        updateData.deleted_at = new Date().toISOString();
-        break;
-
-      case 'activate':
-        updateData.status = 'active';
-        break;
-
-      case 'deactivate':
-        updateData.status = 'inactive';
-        break;
-
-      case 'invite':
-        updateData.status = 'invited';
-        break;
-
-      default:
-        return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
-    }
-
-    // Perform the bulk update
-    const { data, error } = await supabase
-      .from('team_members')
-      .update(updateData)
-      .eq('project_id', projectId)
-      .in('id', team_member_ids)
-      .is('deleted_at', null).select(`
-        *,
-        author:author_id(id, full_name, email),
-        user:user_id(id, email, user_profiles(full_name, nickname, avatar_url))
-      `);
-
-    if (error) {
-      console.error('Error performing bulk operation:', error);
-      return NextResponse.json({ error: 'Failed to perform bulk operation' }, { status: 500 });
-    }
-
-    // Sync snapshot contents and team members to keep data up to date
-    await syncSnapshotData(projectId);
-
-    return NextResponse.json({
-      success: true,
-      action,
-      affected_count: data?.length || 0,
-      team_members: data || [],
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid input data', details: error.errors },
-        { status: 400 },
-      );
-    }
-
-    console.error('Error in POST /api/projects/[id]/team-members/bulk:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  if (fetchError) {
+    throw new APIError('Failed to fetch team members', 500);
   }
-}
+
+  if (!existingMembers || existingMembers.length !== team_member_ids.length) {
+    throw new APIError('Some team members not found', 404);
+  }
+
+  // Check permissions for each team member
+  const unauthorizedMembers = existingMembers.filter(
+    member => member.author_id !== user.id && !isAdminOrOwner,
+  );
+
+  if (unauthorizedMembers.length > 0) {
+    throw new APIError('Insufficient permissions for some team members', 403);
+  }
+
+  const updateData: Record<string, string | null> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  // Prepare update data based on action
+  switch (action) {
+    case 'delete':
+      // Check if any team members are referenced in locked snapshots
+      const { data: lockedSnapshots, error: snapshotError } = await supabase
+        .from('snapshots')
+        .select('id, team_members')
+        .eq('project_id', projectId)
+        .eq('is_locked', true);
+
+      if (snapshotError) {
+        throw new APIError('Failed to check snapshot references', 500);
+      }
+
+      if (lockedSnapshots && lockedSnapshots.length > 0) {
+        const referencedMembers = lockedSnapshots.some(snapshot =>
+          snapshot.team_members?.some((memberId: string) => team_member_ids.includes(memberId)),
+        );
+
+        if (referencedMembers) {
+          throw new APIError(
+            'Cannot delete team members: some are referenced in locked snapshots',
+            409,
+          );
+        }
+      }
+
+      updateData.deleted_at = new Date().toISOString();
+      break;
+
+    case 'activate':
+      updateData.status = 'active';
+      break;
+
+    case 'deactivate':
+      updateData.status = 'inactive';
+      break;
+
+    case 'invite':
+      updateData.status = 'invited';
+      break;
+
+    default:
+      throw new APIError('Invalid action', 400);
+  }
+
+  // Perform the bulk update
+  const { data, error } = await supabase
+    .from('team_members')
+    .update(updateData)
+    .eq('project_id', projectId)
+    .in('id', team_member_ids)
+    .is('deleted_at', null).select(`
+      *,
+      author:author_id(id, full_name, email),
+      user:user_id(id, email, user_profiles(full_name, nickname, avatar_url))
+    `);
+
+  if (error) {
+    throw new APIError('Failed to perform bulk operation', 500);
+  }
+
+  // Sync snapshot contents and team members to keep data up to date
+  await syncSnapshotData(projectId);
+
+  return {
+    success: true,
+    action,
+    affected_count: data?.length || 0,
+    team_members: data || [],
+  };
+});

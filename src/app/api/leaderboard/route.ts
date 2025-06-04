@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { createSupabaseServerClient } from '@/lib/supabase/client';
+import { createAPIHandler } from '@/lib/api/base-handler';
+import { ValidationSchemas } from '@/lib/validations';
+import { SupabaseClientFactory } from '@/lib/supabase/client-factory';
 
-const leaderboardSchema = z.object({
-  limit: z.coerce.number().min(1).max(100).default(50),
-  offset: z.coerce.number().min(0).default(0),
+// Leaderboard-specific validation schema
+const leaderboardQuerySchema = ValidationSchemas.api.pagination.extend({
   min_score: z.coerce.number().min(0).max(100).optional(),
 });
 
@@ -25,39 +26,40 @@ export type LeaderboardProject = {
   snapshot_version: number;
 };
 
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const params = leaderboardSchema.parse({
-      limit: searchParams.get('limit'),
-      offset: searchParams.get('offset'),
-      min_score: searchParams.get('min_score'),
-    });
+export const GET = createAPIHandler(async (request: NextRequest) => {
+  const { searchParams } = new URL(request.url);
 
-    const supabase = await createSupabaseServerClient();
+  // Validate query parameters
+  const params = leaderboardQuerySchema.parse({
+    page: searchParams.get('page'),
+    limit: searchParams.get('limit'),
+    min_score: searchParams.get('min_score'),
+  });
 
-    // Use the existing get_scoring_leaderboard function
-    const { data, error } = await supabase.rpc('get_scoring_leaderboard', {
-      p_limit: params.limit,
-      p_offset: params.offset,
-      p_min_score: params.min_score,
-    });
+  // Calculate offset from page
+  const offset = (params.page - 1) * params.limit;
 
-    if (error) {
-      console.error('Leaderboard query error:', error);
-      return NextResponse.json({ error: 'Failed to fetch leaderboard data' }, { status: 500 });
-    }
+  const supabase = await SupabaseClientFactory.getServerClient();
 
-    return NextResponse.json({
-      projects: data as LeaderboardProject[],
-      pagination: {
-        limit: params.limit,
-        offset: params.offset,
-        hasMore: data?.length === params.limit,
-      },
-    });
-  } catch (error) {
-    console.error('Leaderboard API error:', error);
-    return NextResponse.json({ error: 'Invalid request parameters' }, { status: 400 });
+  // Use the existing get_scoring_leaderboard function
+  const { data, error } = await supabase.rpc('get_scoring_leaderboard', {
+    p_limit: params.limit,
+    p_offset: offset,
+    p_min_score: params.min_score || null,
+  });
+
+  if (error) {
+    console.error('Leaderboard query error:', error);
+    throw new Error('Failed to fetch leaderboard data');
   }
-}
+
+  return {
+    projects: data as LeaderboardProject[],
+    pagination: {
+      page: params.page,
+      limit: params.limit,
+      offset,
+      hasMore: data?.length === params.limit,
+    },
+  };
+});

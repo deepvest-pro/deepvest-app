@@ -1,60 +1,52 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import { Database } from '@/types/supabase';
+import { NextRequest } from 'next/server';
+import { createAPIHandlerWithParams } from '@/lib/api/base-handler';
+import { requireAuth, requireProjectPermission, APIError } from '@/lib/api/middleware/auth';
+import { SupabaseClientFactory } from '@/lib/supabase/client-factory';
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const supabase = createServerComponentClient<Database>({ cookies });
-    const { id: projectId } = await params;
+export const POST = createAPIHandlerWithParams(async (request: NextRequest, params) => {
+  const user = await requireAuth();
 
-    // Check authentication
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  const { id: projectId } = params;
 
-    // Get project with current snapshot info
-    const { data: project, error: projectError } = await supabase
-      .from('projects')
-      .select('id, public_snapshot_id, new_snapshot_id, user_id')
-      .eq('id', projectId)
-      .single();
+  // Check if user has owner permissions (only owners can publish drafts)
+  await requireProjectPermission(user.id, projectId, 'owner');
 
-    if (projectError || !project) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-    }
+  const supabase = await SupabaseClientFactory.getServerClient();
 
-    // Check if user has permission to publish (owner only)
-    if (project.user_id !== user.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+  // Get project with current snapshot info
+  const { data: project, error: projectError } = await supabase
+    .from('projects')
+    .select('id, public_snapshot_id, new_snapshot_id, user_id')
+    .eq('id', projectId)
+    .single();
 
-    // Check if there's a draft to publish
-    if (!project.new_snapshot_id || project.new_snapshot_id === project.public_snapshot_id) {
-      return NextResponse.json({ error: 'No draft to publish' }, { status: 400 });
-    }
-
-    // Start transaction: update project and lock the snapshot
-    const { error: updateError } = await supabase.rpc('publish_project_draft', {
-      project_id: projectId,
-      new_public_snapshot_id: project.new_snapshot_id,
-    });
-
-    if (updateError) {
-      console.error('Error publishing draft:', updateError);
-      return NextResponse.json({ error: 'Failed to publish draft' }, { status: 500 });
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: 'Draft published successfully',
-    });
-  } catch (error) {
-    console.error('Error in publish-draft endpoint:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  if (projectError || !project) {
+    throw new APIError('Project not found', 404);
   }
-}
+
+  // Double-check ownership (redundant but safe)
+  if (project.user_id !== user.id) {
+    throw new APIError('Only project owner can publish drafts', 403);
+  }
+
+  // Check if there's a draft to publish
+  if (!project.new_snapshot_id || project.new_snapshot_id === project.public_snapshot_id) {
+    throw new APIError('No draft to publish', 400);
+  }
+
+  // Start transaction: update project and lock the snapshot
+  const { error: updateError } = await supabase.rpc('publish_project_draft', {
+    project_id: projectId,
+    new_public_snapshot_id: project.new_snapshot_id,
+  });
+
+  if (updateError) {
+    console.error('Error publishing draft:', updateError);
+    throw new Error('Failed to publish draft');
+  }
+
+  return {
+    success: true,
+    message: 'Draft published successfully',
+  };
+});

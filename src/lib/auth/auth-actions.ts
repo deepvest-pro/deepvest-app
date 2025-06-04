@@ -7,11 +7,11 @@ import type {
   UpdatePasswordRequest,
   ProfileUpdateData,
 } from '../validations/auth';
-import { createSupabaseServerClient } from '../supabase/client';
+import { SupabaseClientFactory } from '@/lib/supabase/client-factory';
 
 export async function signIn(credentials: SignInCredentials) {
   try {
-    const supabase = await createSupabaseServerClient();
+    const supabase = await SupabaseClientFactory.getServerClient();
 
     const { error } = await supabase.auth.signInWithPassword({
       email: credentials.email,
@@ -31,21 +31,27 @@ export async function signIn(credentials: SignInCredentials) {
 
 export async function signUp(credentials: SignUpCredentials) {
   try {
-    const supabase = await createSupabaseServerClient();
+    const supabase = await SupabaseClientFactory.getServerClient();
 
-    const { error } = await supabase.auth.signUp({
+    const { data: authData, error: authError } = await supabase.auth.signUp({
       email: credentials.email,
       password: credentials.password,
       options: {
-        emailRedirectTo: `${process.env.APP_URL}/auth/callback`,
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
         data: {
           full_name: credentials.full_name,
+          nickname: credentials.nickname,
         },
       },
     });
 
-    if (error) {
-      return { error: error.message };
+    if (authError) {
+      return { error: authError.message };
+    }
+
+    // Log successful registration
+    if (authData.user) {
+      console.log('User registered successfully:', authData.user.id);
     }
 
     return { success: true };
@@ -57,7 +63,7 @@ export async function signUp(credentials: SignUpCredentials) {
 
 export async function signOut() {
   try {
-    const supabase = await createSupabaseServerClient();
+    const supabase = await SupabaseClientFactory.getServerClient();
 
     const { error } = await supabase.auth.signOut();
 
@@ -74,10 +80,10 @@ export async function signOut() {
 
 export async function resetPassword(request: ResetPasswordRequest) {
   try {
-    const supabase = await createSupabaseServerClient();
+    const supabase = await SupabaseClientFactory.getServerClient();
 
     const { error } = await supabase.auth.resetPasswordForEmail(request.email, {
-      redirectTo: `${process.env.APP_URL}/auth/reset-password`,
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/reset-password`,
     });
 
     if (error) {
@@ -93,7 +99,7 @@ export async function resetPassword(request: ResetPasswordRequest) {
 
 export async function updatePassword(request: UpdatePasswordRequest) {
   try {
-    const supabase = await createSupabaseServerClient();
+    const supabase = await SupabaseClientFactory.getServerClient();
 
     const { error } = await supabase.auth.updateUser({
       password: request.password,
@@ -112,7 +118,7 @@ export async function updatePassword(request: UpdatePasswordRequest) {
 
 export async function updateProfile(profileData: ProfileUpdateData) {
   try {
-    const supabase = await createSupabaseServerClient();
+    const supabase = await SupabaseClientFactory.getServerClient();
 
     const {
       data: { user },

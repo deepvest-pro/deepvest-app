@@ -1,6 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { createSupabaseServerClient } from '@/lib/supabase/client';
+import { createAPIHandlerWithParams } from '@/lib/api/base-handler';
+import { requireAuth, APIError } from '@/lib/api/middleware/auth';
+import { SupabaseClientFactory } from '@/lib/supabase/client-factory';
+import { REGEX_PATTERNS } from '@/lib/constants';
 import { getPromptWithVariables } from '@/lib/prompts';
 import {
   ScoringStatus,
@@ -39,37 +42,23 @@ interface ParsedLLMScoring {
   research?: string | null;
 }
 
-// CORS headers
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
-
 // Request validation schema
 const generateScoringRequestSchema = z.object({
   force: z.boolean().optional().default(false), // Force regeneration if scoring already exists
 });
 
-// LLM response validation schema (soft validation)
+// LLM response validation schema (soft validation with coercion)
 const llmScoringResponseSchema = z.object({
-  score: z.number().min(0).max(100).optional(),
-  investment_rating: z.number().min(0).max(100).optional(),
-  market_potential: z.number().min(0).max(100).optional(),
-  team_competency: z.number().min(0).max(100).optional(),
-  tech_innovation: z.number().min(0).max(100).optional(),
-  business_model: z.number().min(0).max(100).optional(),
-  execution_risk: z.number().min(0).max(100).optional(),
+  score: z.coerce.number().min(0).max(100).optional(),
+  investment_rating: z.coerce.number().min(0).max(100).optional(),
+  market_potential: z.coerce.number().min(0).max(100).optional(),
+  team_competency: z.coerce.number().min(0).max(100).optional(),
+  tech_innovation: z.coerce.number().min(0).max(100).optional(),
+  business_model: z.coerce.number().min(0).max(100).optional(),
+  execution_risk: z.coerce.number().min(0).max(100).optional(),
   summary: z.string().optional(),
   research: z.string().optional(),
 });
-
-/**
- * Handle CORS preflight requests
- */
-export async function OPTIONS() {
-  return new Response(null, { headers: corsHeaders });
-}
 
 /**
  * Generate content using Gemini API
@@ -110,14 +99,14 @@ async function generateWithGemini(prompt: string, apiKey: string): Promise<strin
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+      throw new APIError(`Gemini API error: ${response.status} ${response.statusText}`, 500);
     }
 
     const data = await response.json();
 
     // Handle API errors
     if (data.error) {
-      throw new Error(`Gemini API error: ${data.error.message}`);
+      throw new APIError(`Gemini API error: ${data.error.message}`, 500);
     }
 
     // Extract response text
@@ -131,15 +120,18 @@ async function generateWithGemini(prompt: string, apiKey: string): Promise<strin
       }
     }
 
-    throw new Error('No content generated from Gemini API');
+    throw new APIError('No content generated from Gemini API', 500);
   } catch (error) {
-    if (error instanceof Error) {
-      if (error.name === 'AbortError') {
-        throw new Error('Gemini API request timeout');
-      }
+    if (error instanceof APIError) {
       throw error;
     }
-    throw new Error('Failed to generate content with Gemini API');
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        throw new APIError('Gemini API request timeout', 408);
+      }
+      throw new APIError(`Gemini API error: ${error.message}`, 500);
+    }
+    throw new APIError('Failed to generate content with Gemini API', 500);
   }
 }
 
@@ -165,33 +157,24 @@ function parseLLMResponse(response: string): ParsedLLMScoring | null {
       return validated.data;
     } else {
       console.warn('LLM response validation warnings:', validated.error.errors);
-      // Return the parsed data anyway, but with fallbacks
+      // Return the parsed data anyway, but with fallbacks and coercion
+      const coerceNumber = (value: unknown): number | null => {
+        if (typeof value === 'number') return Math.max(0, Math.min(100, value));
+        if (typeof value === 'string') {
+          const num = parseFloat(value);
+          return !isNaN(num) ? Math.max(0, Math.min(100, num)) : null;
+        }
+        return null;
+      };
+
       return {
-        score: typeof parsed.score === 'number' ? Math.max(0, Math.min(100, parsed.score)) : null,
-        investment_rating:
-          typeof parsed.investment_rating === 'number'
-            ? Math.max(0, Math.min(100, parsed.investment_rating))
-            : null,
-        market_potential:
-          typeof parsed.market_potential === 'number'
-            ? Math.max(0, Math.min(100, parsed.market_potential))
-            : null,
-        team_competency:
-          typeof parsed.team_competency === 'number'
-            ? Math.max(0, Math.min(100, parsed.team_competency))
-            : null,
-        tech_innovation:
-          typeof parsed.tech_innovation === 'number'
-            ? Math.max(0, Math.min(100, parsed.tech_innovation))
-            : null,
-        business_model:
-          typeof parsed.business_model === 'number'
-            ? Math.max(0, Math.min(100, parsed.business_model))
-            : null,
-        execution_risk:
-          typeof parsed.execution_risk === 'number'
-            ? Math.max(0, Math.min(100, parsed.execution_risk))
-            : null,
+        score: coerceNumber(parsed.score),
+        investment_rating: coerceNumber(parsed.investment_rating),
+        market_potential: coerceNumber(parsed.market_potential),
+        team_competency: coerceNumber(parsed.team_competency),
+        tech_innovation: coerceNumber(parsed.tech_innovation),
+        business_model: coerceNumber(parsed.business_model),
+        execution_risk: coerceNumber(parsed.execution_risk),
         summary:
           typeof parsed.summary === 'string' ? parsed.summary : 'Analysis completed successfully.',
         research:
@@ -203,370 +186,6 @@ function parseLLMResponse(response: string): ParsedLLMScoring | null {
   } catch (error) {
     console.error('Error parsing LLM response:', error);
     return null;
-  }
-}
-
-/**
- * Generate project scoring endpoint
- */
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const startTime = Date.now();
-
-  try {
-    const { id: projectId } = await params;
-
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(projectId)) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid project ID format' },
-        { status: 400, headers: corsHeaders },
-      );
-    }
-
-    // Parse and validate request body
-    const body = await request.json();
-    const validationResult = generateScoringRequestSchema.safeParse(body);
-
-    if (!validationResult.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Validation error: ${validationResult.error.errors
-            .map(e => e.message)
-            .join(', ')}`,
-        },
-        { status: 400, headers: corsHeaders },
-      );
-    }
-
-    const { force } = validationResult.data;
-
-    // Initialize Supabase client
-    const supabase = await createSupabaseServerClient();
-
-    // Get current user
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json(
-        { success: false, error: 'Authentication required' },
-        { status: 401, headers: corsHeaders },
-      );
-    }
-
-    // Check if user has permission to generate scoring (admin or owner)
-    const { data: permission, error: permissionError } = await supabase
-      .from('project_permissions')
-      .select('role')
-      .eq('project_id', projectId)
-      .eq('user_id', user.id)
-      .single();
-
-    if (permissionError || !permission || !['admin', 'owner'].includes(permission.role)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Insufficient permissions. Only project admins and owners can generate scoring.',
-        },
-        { status: 403, headers: corsHeaders },
-      );
-    }
-
-    // Get project information
-    const { data: project, error: projectError } = await supabase
-      .from('projects')
-      .select('id, slug, public_snapshot_id, is_public, is_archived')
-      .eq('id', projectId)
-      .single();
-
-    if (projectError || !project) {
-      return NextResponse.json(
-        { success: false, error: 'Project not found' },
-        { status: 404, headers: corsHeaders },
-      );
-    }
-
-    if (!project.public_snapshot_id) {
-      return NextResponse.json(
-        { success: false, error: 'Project has no public snapshot available for scoring' },
-        { status: 400, headers: corsHeaders },
-      );
-    }
-
-    // Get snapshot information
-    const { data: snapshot, error: snapshotError } = await supabase
-      .from('snapshots')
-      .select(
-        `
-        id, version, name, slogan, description, status, country, city,
-        repository_urls, website_urls, logo_url, banner_url, video_urls,
-        contents, team_members, is_locked, author_id
-      `,
-      )
-      .eq('id', project.public_snapshot_id)
-      .single();
-
-    if (snapshotError || !snapshot) {
-      return NextResponse.json(
-        { success: false, error: 'Project snapshot not found' },
-        { status: 404, headers: corsHeaders },
-      );
-    }
-
-    // Get public project content (filter by IDs from snapshot if available)
-    let projectContent: ContentScoringData[] = [];
-    if (snapshot.contents && snapshot.contents.length > 0) {
-      const { data: contentData, error: contentError } = await supabase
-        .from('project_content')
-        .select('slug, title, content_type, content, description, file_urls')
-        .eq('project_id', projectId)
-        .eq('is_public', true)
-        .is('deleted_at', null)
-        .in('id', snapshot.contents)
-        .order('created_at', { ascending: true });
-
-      if (contentError) {
-        console.error('Error fetching project content:', contentError);
-      } else {
-        projectContent = contentData || [];
-      }
-    }
-
-    // Get public team members (filter by IDs from snapshot if available)
-    let teamMembers: TeamScoringData[] = [];
-    if (snapshot.team_members && snapshot.team_members.length > 0) {
-      const { data: teamData, error: teamError } = await supabase
-        .from('team_members')
-        .select(
-          `
-          name, email, positions, is_founder, equity_percent, country, city,
-          x_url, github_url, linkedin_url, status
-        `,
-        )
-        .eq('project_id', projectId)
-        .is('deleted_at', null)
-        .in('id', snapshot.team_members)
-        .order('is_founder', { ascending: false });
-
-      if (teamError) {
-        console.error('Error fetching team members:', teamError);
-      } else {
-        teamMembers = teamData || [];
-      }
-    }
-
-    // Generate markdown content for analysis
-    const markdownContent = generateProjectMarkdown(project, snapshot, projectContent, teamMembers);
-
-    // Check if Gemini API key is configured
-    const apiKey = process.env.GEMINI_API_KEY;
-    let llmResponse: string | null = null;
-    let parsedScoring: ParsedLLMScoring | null = null;
-    let aiEnabled = false;
-    let llmError: string | null = null;
-
-    if (apiKey) {
-      try {
-        // Generate prompt for LLM analysis
-        const scoringPrompt = getPromptWithVariables('PROJECT_INVESTMENT_SCORING', {
-          PROJECT_DATA: markdownContent,
-        });
-
-        // Generate scoring using Gemini API
-        llmResponse = await generateWithGemini(scoringPrompt, apiKey);
-
-        // Parse LLM response
-        parsedScoring = parseLLMResponse(llmResponse);
-
-        if (parsedScoring) {
-          aiEnabled = true;
-        } else {
-          throw new Error('Failed to parse LLM response');
-        }
-      } catch (error) {
-        console.error('LLM processing error:', error);
-        llmError = error instanceof Error ? error.message : 'LLM processing failed';
-        aiEnabled = false;
-      }
-    } else {
-      console.error('GEMINI_API_KEY not configured, using fallback data');
-      llmError = 'GEMINI_API_KEY not configured';
-    }
-
-    // Prepare scoring data for database insertion
-    let scoringDataForDB: ScoringDataForDB = {
-      snapshot_id: project.public_snapshot_id,
-      status: aiEnabled ? 'completed' : 'failed',
-      ai_model_version: aiEnabled ? 'gemini-2.0-flash-v1.0.0' : 'fallback-v1.0.0',
-    };
-
-    if (aiEnabled && parsedScoring) {
-      // Use real LLM results
-      scoringDataForDB = {
-        ...scoringDataForDB,
-        investment_rating: parsedScoring.investment_rating || null,
-        market_potential: parsedScoring.market_potential || null,
-        team_competency: parsedScoring.team_competency || null,
-        tech_innovation: parsedScoring.tech_innovation || null,
-        business_model: parsedScoring.business_model || null,
-        execution_risk: parsedScoring.execution_risk || null,
-        summary: parsedScoring.summary || 'Analysis completed successfully.',
-        research:
-          parsedScoring.research || 'Detailed analysis was performed on the provided project data.',
-        score: parsedScoring.score || null,
-      };
-    } else {
-      // Use fallback/mock data
-      scoringDataForDB = {
-        ...scoringDataForDB,
-        status: 'completed', // Even fallback should be marked as completed
-        investment_rating: 75.5,
-        market_potential: 82.0,
-        team_competency: 68.5,
-        tech_innovation: 79.0,
-        business_model: 71.5,
-        execution_risk: 25.0,
-        summary: aiEnabled
-          ? 'Fallback analysis: This project shows potential but requires further evaluation.'
-          : 'Mock analysis: This project shows strong market potential with innovative technology approach.',
-        research: aiEnabled
-          ? 'Fallback analysis: Unable to perform AI analysis due to technical issues.'
-          : 'Mock research: Detailed market analysis indicates strong demand in the target sector.',
-        score: aiEnabled ? 70.0 : 74.8,
-      };
-    }
-
-    // Check if scoring already exists and force is false
-    if (!force) {
-      const { data: existingScoring, error: existingScoringError } = await supabase
-        .from('project_scoring')
-        .select('id, status, created_at')
-        .eq('snapshot_id', project.public_snapshot_id)
-        .maybeSingle();
-
-      if (existingScoringError) {
-        console.error('Error checking existing scoring:', existingScoringError);
-      }
-
-      if (existingScoring) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Scoring already exists for this project (ID: ${existingScoring.id}, status: ${existingScoring.status}, created: ${existingScoring.created_at}). Use force=true to regenerate.`,
-          },
-          { status: 409, headers: corsHeaders },
-        );
-      }
-    }
-
-    // If force=true, delete existing scoring first
-    if (force) {
-      // First, clear the scoring_id from snapshot
-      const { error: snapshotClearError } = await supabase
-        .from('snapshots')
-        .update({ scoring_id: null })
-        .eq('id', project.public_snapshot_id);
-
-      if (snapshotClearError) {
-        console.error('Error clearing scoring_id from snapshot:', snapshotClearError);
-        // Continue anyway, as this is not critical for the deletion
-      }
-
-      // Then delete the scoring record
-      const { error: deleteError } = await supabase
-        .from('project_scoring')
-        .delete()
-        .eq('snapshot_id', project.public_snapshot_id);
-
-      if (deleteError) {
-        console.error('Error deleting existing scoring:', deleteError);
-        // Continue anyway, as the insert might still work
-      }
-    }
-
-    // Insert scoring data into database
-    const { data: savedScoring, error: scoringInsertError } = await supabase
-      .from('project_scoring')
-      .insert(scoringDataForDB)
-      .select()
-      .single();
-
-    if (scoringInsertError) {
-      console.error('Error saving scoring to database:', scoringInsertError);
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Failed to save scoring to database: ${scoringInsertError.message}`,
-          metadata: {
-            projectId,
-            snapshotId: project.public_snapshot_id,
-            processingTime: Date.now() - startTime,
-            aiEnabled,
-            error: llmError,
-          },
-        },
-        { status: 500, headers: corsHeaders },
-      );
-    }
-
-    // Update snapshot with scoring_id to establish bidirectional relationship
-    const { error: snapshotUpdateError } = await supabase
-      .from('snapshots')
-      .update({ scoring_id: savedScoring.id })
-      .eq('id', project.public_snapshot_id);
-
-    if (snapshotUpdateError) {
-      console.error('Error updating snapshot with scoring_id:', snapshotUpdateError);
-      // Don't fail the request, just log the error as the scoring was saved successfully
-      // The scoring is still valid even if the snapshot reference isn't updated
-    }
-
-    // Successful response with data from database
-    const processingTime = Date.now() - startTime;
-    return NextResponse.json(
-      {
-        success: true,
-        data: savedScoring,
-        metadata: {
-          projectId,
-          snapshotId: project.public_snapshot_id,
-          processingTime,
-          aiEnabled,
-          promptLength: apiKey
-            ? getPromptWithVariables('PROJECT_INVESTMENT_SCORING', {
-                PROJECT_DATA: markdownContent,
-              }).length
-            : undefined,
-          contentSections: {
-            projectInfo: true,
-            snapshot: true,
-            content: (projectContent || []).length,
-            teamMembers: (teamMembers || []).length,
-          },
-          llmError: llmError || undefined,
-        },
-      },
-      { headers: corsHeaders },
-    );
-  } catch (error) {
-    console.error('Project scoring generation error:', error);
-
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    const processingTime = Date.now() - startTime;
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: errorMessage,
-        metadata: {
-          processingTime,
-        },
-      },
-      { status: 500, headers: corsHeaders },
-    );
   }
 }
 
@@ -815,3 +434,285 @@ function generateProjectMarkdown(
 
   return lines.join('\n');
 }
+
+/**
+ * Generate project scoring endpoint
+ */
+export const POST = createAPIHandlerWithParams(async (request: NextRequest, params) => {
+  const { id: projectId } = params;
+
+  // Validate UUID format using centralized regex
+  if (!REGEX_PATTERNS.uuid.test(projectId)) {
+    throw new APIError('Invalid project ID format', 400);
+  }
+
+  // Parse and validate request body
+  const body = await request.json();
+  const { force } = generateScoringRequestSchema.parse(body);
+
+  // Require authentication
+  const user = await requireAuth();
+
+  // Check if user has permission to generate scoring (admin or owner)
+  const supabase = await SupabaseClientFactory.getServerClient();
+
+  const { data: permission, error: permissionError } = await supabase
+    .from('project_permissions')
+    .select('role')
+    .eq('project_id', projectId)
+    .eq('user_id', user.id)
+    .single();
+
+  if (permissionError || !permission || !['admin', 'owner'].includes(permission.role)) {
+    throw new APIError(
+      'Insufficient permissions. Only project admins and owners can generate scoring.',
+      403,
+    );
+  }
+
+  // Get project information
+  const { data: project, error: projectError } = await supabase
+    .from('projects')
+    .select('id, slug, public_snapshot_id, is_public, is_archived')
+    .eq('id', projectId)
+    .single();
+
+  if (projectError || !project) {
+    throw new APIError('Project not found', 404);
+  }
+
+  if (!project.public_snapshot_id) {
+    throw new APIError('Project has no public snapshot available for scoring', 400);
+  }
+
+  // Get snapshot information
+  const { data: snapshot, error: snapshotError } = await supabase
+    .from('snapshots')
+    .select(
+      `
+      id, version, name, slogan, description, status, country, city,
+      repository_urls, website_urls, logo_url, banner_url, video_urls,
+      contents, team_members, is_locked, author_id
+    `,
+    )
+    .eq('id', project.public_snapshot_id)
+    .single();
+
+  if (snapshotError || !snapshot) {
+    throw new APIError('Project snapshot not found', 404);
+  }
+
+  // Get public project content (filter by IDs from snapshot if available)
+  let projectContent: ContentScoringData[] = [];
+  if (snapshot.contents && snapshot.contents.length > 0) {
+    const { data: contentData, error: contentError } = await supabase
+      .from('project_content')
+      .select('slug, title, content_type, content, description, file_urls')
+      .eq('project_id', projectId)
+      .eq('is_public', true)
+      .is('deleted_at', null)
+      .in('id', snapshot.contents)
+      .order('created_at', { ascending: true });
+
+    if (contentError) {
+      console.error('Error fetching project content:', contentError);
+    } else {
+      projectContent = contentData || [];
+    }
+  }
+
+  // Get public team members (filter by IDs from snapshot if available)
+  let teamMembers: TeamScoringData[] = [];
+  if (snapshot.team_members && snapshot.team_members.length > 0) {
+    const { data: teamData, error: teamError } = await supabase
+      .from('team_members')
+      .select(
+        `
+        name, email, positions, is_founder, equity_percent, country, city,
+        x_url, github_url, linkedin_url, status
+      `,
+      )
+      .eq('project_id', projectId)
+      .is('deleted_at', null)
+      .in('id', snapshot.team_members)
+      .order('is_founder', { ascending: false });
+
+    if (teamError) {
+      console.error('Error fetching team members:', teamError);
+    } else {
+      teamMembers = teamData || [];
+    }
+  }
+
+  // Generate markdown content for analysis
+  const markdownContent = generateProjectMarkdown(project, snapshot, projectContent, teamMembers);
+
+  // Check if Gemini API key is configured
+  const apiKey = process.env.GEMINI_API_KEY;
+  let llmResponse: string | null = null;
+  let parsedScoring: ParsedLLMScoring | null = null;
+  let aiEnabled = false;
+  let llmError: string | null = null;
+
+  if (apiKey) {
+    try {
+      // Generate prompt for LLM analysis
+      const scoringPrompt = getPromptWithVariables('PROJECT_INVESTMENT_SCORING', {
+        PROJECT_DATA: markdownContent,
+      });
+
+      // Generate scoring using Gemini API
+      llmResponse = await generateWithGemini(scoringPrompt, apiKey);
+
+      // Parse LLM response
+      parsedScoring = parseLLMResponse(llmResponse);
+
+      if (parsedScoring) {
+        aiEnabled = true;
+      } else {
+        throw new APIError('Failed to parse LLM response', 500);
+      }
+    } catch (error) {
+      console.error('LLM processing error:', error);
+      llmError = error instanceof Error ? error.message : 'LLM processing failed';
+      aiEnabled = false;
+    }
+  } else {
+    console.error('GEMINI_API_KEY not configured, using fallback data');
+    llmError = 'GEMINI_API_KEY not configured';
+  }
+
+  // Prepare scoring data for database insertion
+  let scoringDataForDB: ScoringDataForDB = {
+    snapshot_id: project.public_snapshot_id,
+    status: aiEnabled ? 'completed' : 'failed',
+    ai_model_version: aiEnabled ? 'gemini-2.0-flash-v1.0.0' : 'fallback-v1.0.0',
+  };
+
+  if (aiEnabled && parsedScoring) {
+    // Use real LLM results
+    scoringDataForDB = {
+      ...scoringDataForDB,
+      investment_rating: parsedScoring.investment_rating || null,
+      market_potential: parsedScoring.market_potential || null,
+      team_competency: parsedScoring.team_competency || null,
+      tech_innovation: parsedScoring.tech_innovation || null,
+      business_model: parsedScoring.business_model || null,
+      execution_risk: parsedScoring.execution_risk || null,
+      summary: parsedScoring.summary || 'Analysis completed successfully.',
+      research:
+        parsedScoring.research || 'Detailed analysis was performed on the provided project data.',
+      score: parsedScoring.score || null,
+    };
+  } else {
+    // Use fallback/mock data
+    scoringDataForDB = {
+      ...scoringDataForDB,
+      status: 'completed', // Even fallback should be marked as completed
+      investment_rating: 75.5,
+      market_potential: 82.0,
+      team_competency: 68.5,
+      tech_innovation: 79.0,
+      business_model: 71.5,
+      execution_risk: 25.0,
+      summary: aiEnabled
+        ? 'Fallback analysis: This project shows potential but requires further evaluation.'
+        : 'Mock analysis: This project shows strong market potential with innovative technology approach.',
+      research: aiEnabled
+        ? 'Fallback analysis: Unable to perform AI analysis due to technical issues.'
+        : 'Mock research: Detailed market analysis indicates strong demand in the target sector.',
+      score: aiEnabled ? 70.0 : 74.8,
+    };
+  }
+
+  // Check if scoring already exists and force is false
+  if (!force) {
+    const { data: existingScoring, error: existingScoringError } = await supabase
+      .from('project_scoring')
+      .select('id, status, created_at')
+      .eq('snapshot_id', project.public_snapshot_id)
+      .maybeSingle();
+
+    if (existingScoringError) {
+      console.error('Error checking existing scoring:', existingScoringError);
+    }
+
+    if (existingScoring) {
+      throw new APIError(
+        `Scoring already exists for this project (ID: ${existingScoring.id}, status: ${existingScoring.status}, created: ${existingScoring.created_at}). Use force=true to regenerate.`,
+        409,
+      );
+    }
+  }
+
+  // If force=true, delete existing scoring first
+  if (force) {
+    // First, clear the scoring_id from snapshot
+    const { error: snapshotClearError } = await supabase
+      .from('snapshots')
+      .update({ scoring_id: null })
+      .eq('id', project.public_snapshot_id);
+
+    if (snapshotClearError) {
+      console.error('Error clearing scoring_id from snapshot:', snapshotClearError);
+      // Continue anyway, as this is not critical for the deletion
+    }
+
+    // Then delete the scoring record
+    const { error: deleteError } = await supabase
+      .from('project_scoring')
+      .delete()
+      .eq('snapshot_id', project.public_snapshot_id);
+
+    if (deleteError) {
+      console.error('Error deleting existing scoring:', deleteError);
+      // Continue anyway, as the insert might still work
+    }
+  }
+
+  // Insert scoring data into database
+  const { data: savedScoring, error: scoringInsertError } = await supabase
+    .from('project_scoring')
+    .insert(scoringDataForDB)
+    .select()
+    .single();
+
+  if (scoringInsertError) {
+    console.error('Error saving scoring to database:', scoringInsertError);
+    throw new APIError(`Failed to save scoring to database: ${scoringInsertError.message}`, 500);
+  }
+
+  // Update snapshot with scoring_id to establish bidirectional relationship
+  const { error: snapshotUpdateError } = await supabase
+    .from('snapshots')
+    .update({ scoring_id: savedScoring.id })
+    .eq('id', project.public_snapshot_id);
+
+  if (snapshotUpdateError) {
+    console.error('Error updating snapshot with scoring_id:', snapshotUpdateError);
+    // Don't fail the request, just log the error as the scoring was saved successfully
+    // The scoring is still valid even if the snapshot reference isn't updated
+  }
+
+  // Successful response with data from database
+  return {
+    scoring: savedScoring,
+    metadata: {
+      projectId,
+      snapshotId: project.public_snapshot_id,
+      aiEnabled,
+      promptLength: apiKey
+        ? getPromptWithVariables('PROJECT_INVESTMENT_SCORING', {
+            PROJECT_DATA: markdownContent,
+          }).length
+        : undefined,
+      contentSections: {
+        projectInfo: true,
+        snapshot: true,
+        content: (projectContent || []).length,
+        teamMembers: (teamMembers || []).length,
+      },
+      llmError: llmError || undefined,
+    },
+  };
+});

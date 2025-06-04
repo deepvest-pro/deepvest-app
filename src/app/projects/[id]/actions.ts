@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import type { Database } from '@/types/supabase';
 import { checkUserProjectRole, deleteProjectFiles } from '@/lib/supabase/helpers';
-import { createSupabaseServerClient } from '@/lib/supabase/client'; // New client
+import { SupabaseClientFactory } from "@/lib/supabase/client-factory";
 
 interface ToggleProjectPublicationArgs {
   projectId: string;
@@ -23,7 +23,7 @@ export async function toggleProjectPublication({
   );
 
   try {
-    const supabase = await createSupabaseServerClient();
+    const supabase = await SupabaseClientFactory.getServerClient();
 
     const {
       data: { user },
@@ -174,7 +174,7 @@ export async function publishDraft({ projectId }: PublishDraftArgs): Promise<{
   console.log(`[Action] publishDraft called for project ${projectId}`);
 
   try {
-    const supabase = await createSupabaseServerClient();
+    const supabase = await SupabaseClientFactory.getServerClient();
 
     const {
       data: { user },
@@ -255,7 +255,7 @@ export async function deleteProject({ projectId }: DeleteProjectArgs): Promise<{
   console.log(`[Action] deleteProject called for project ${projectId}`);
 
   try {
-    const supabase = await createSupabaseServerClient();
+    const supabase = await SupabaseClientFactory.getServerClient();
 
     const {
       data: { user },

@@ -15,7 +15,7 @@ import {
   Select,
   Spinner,
 } from '@radix-ui/themes';
-import { useQuery } from '@tanstack/react-query';
+import { useApiQuery, QUERY_KEYS } from '@/hooks';
 import type { LeaderboardProject } from '@/app/api/leaderboard/route';
 
 interface LeaderboardResponse {
@@ -32,24 +32,27 @@ export function LeaderboardList() {
   const [currentPage, setCurrentPage] = useState(0);
   const pageSize = 20;
 
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['leaderboard', currentPage, scoreFilter],
-    queryFn: async (): Promise<LeaderboardResponse> => {
-      const params = new URLSearchParams({
-        offset: (currentPage * pageSize).toString(),
-        limit: pageSize.toString(),
-      });
+  // Build endpoint with query parameters
+  const getEndpoint = () => {
+    const params = new URLSearchParams({
+      offset: (currentPage * pageSize).toString(),
+      limit: pageSize.toString(),
+    });
 
-      if (scoreFilter !== 'all') {
-        params.append('min_score', scoreFilter);
-      }
+    if (scoreFilter !== 'all') {
+      params.append('min_score', scoreFilter);
+    }
 
-      const response = await fetch(`/api/leaderboard?${params}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch leaderboard');
-      }
-      return response.json();
-    },
+    return `/leaderboard?${params}`;
+  };
+
+  const { data, isLoading, error, refetch } = useApiQuery<LeaderboardResponse>(getEndpoint(), {
+    queryKey: [
+      ...QUERY_KEYS.leaderboard.list({
+        minScore: scoreFilter !== 'all' ? Number(scoreFilter) : undefined,
+      }),
+      currentPage,
+    ],
   });
 
   const projects = data?.projects || [];

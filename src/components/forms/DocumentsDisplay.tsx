@@ -9,19 +9,18 @@ import {
   EyeOpenIcon,
   EyeClosedIcon,
   MagicWandIcon,
-  EyeOpenIcon as ViewIcon,
 } from '@radix-ui/react-icons';
 import { MarkdownViewer } from '@/components/ui';
 import { DropdownMenu } from '@radix-ui/themes';
-import { ProjectContentWithAuthor, ContentType } from '@/types/supabase';
+import type { ProjectDocumentWithAuthor } from '@/lib/supabase/repositories/project-documents';
 
 interface DocumentsDisplayProps {
-  documents: ProjectContentWithAuthor[];
+  documents: ProjectDocumentWithAuthor[];
   showActions?: boolean;
-  onEdit?: (document: ProjectContentWithAuthor) => void;
+  onEdit?: (document: ProjectDocumentWithAuthor) => void;
   onDelete?: (documentId: string) => void;
   onToggleVisibility?: (documentId: string, isPublic: boolean) => void;
-  onGetContent?: (document: ProjectContentWithAuthor) => void;
+  onGetContent?: (document: ProjectDocumentWithAuthor) => void;
   transcribingDocuments?: Set<string>;
   canEdit?: boolean;
   emptyMessage?: string;
@@ -46,8 +45,8 @@ export function DocumentsDisplay({
     setContentModalOpen(true);
   };
 
-  const getContentTypeLabel = (contentType: ContentType): string => {
-    const labels: Record<ContentType, string> = {
+  const getContentTypeLabel = (contentType: string): string => {
+    const labels: Record<string, string> = {
       presentation: 'Presentation',
       research: 'Research',
       pitch_deck: 'Pitch Deck',
@@ -67,8 +66,8 @@ export function DocumentsDisplay({
     return labels[contentType] || 'Document';
   };
 
-  const getContentTypeColor = (contentType: ContentType) => {
-    const colors: Record<ContentType, string> = {
+  const getContentTypeColor = (contentType: string) => {
+    const colors: Record<string, string> = {
       presentation: 'blue',
       research: 'green',
       pitch_deck: 'purple',
@@ -203,7 +202,7 @@ export function DocumentsDisplay({
                         style={{ marginTop: '8px', width: 'fit-content' }}
                       >
                         <Flex align="center" gap="2">
-                          <ViewIcon width="12" height="12" />
+                          <EyeOpenIcon width="12" height="12" />
                           Show content
                         </Flex>
                       </Button>

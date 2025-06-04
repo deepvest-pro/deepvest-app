@@ -1,7 +1,9 @@
 import { notFound, redirect } from 'next/navigation';
-import { createSupabaseServerClient } from '@/lib/supabase/client';
+import { SupabaseClientFactory } from '@/lib/supabase/client-factory';
 import { checkUserProjectRole, getProjectWithDetails } from '@/lib/supabase/helpers';
 import { EditProjectContent } from '@/components/projects/EditProjectContent';
+
+export const dynamic = 'force-dynamic';
 
 interface EditProjectPageProps {
   params: Promise<{
@@ -10,7 +12,7 @@ interface EditProjectPageProps {
 }
 
 export default async function EditProjectPage({ params }: EditProjectPageProps) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await SupabaseClientFactory.getServerClient();
   const { id } = await params;
 
   // Check authentication

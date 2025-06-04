@@ -2,15 +2,15 @@
 
 import { useState } from 'react';
 import { Flex, Button, AlertDialog } from '@radix-ui/themes';
-import { ProjectContentWithAuthor } from '@/types/supabase';
+import type { ProjectDocumentWithAuthor } from '@/lib/supabase/repositories/project-documents';
 import { DocumentsDisplay } from './DocumentsDisplay';
 
 interface DocumentsListProps {
-  documents: ProjectContentWithAuthor[];
-  onEdit: (document: ProjectContentWithAuthor) => void;
+  documents: ProjectDocumentWithAuthor[];
+  onEdit: (document: ProjectDocumentWithAuthor) => void;
   onDelete: (documentId: string) => void;
   onToggleVisibility: (documentId: string, isPublic: boolean) => void;
-  onGetContent?: (document: ProjectContentWithAuthor) => void;
+  onGetContent?: (document: ProjectDocumentWithAuthor) => void;
   transcribingDocuments?: Set<string>;
   canEdit?: boolean;
 }

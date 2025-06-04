@@ -16,9 +16,9 @@ import {
   Switch,
   Heading,
 } from '@radix-ui/themes';
-import { ProjectContentWithAuthor, ContentType } from '@/types/supabase';
+import type { ProjectDocumentWithAuthor } from '@/lib/supabase/repositories/project-documents';
 import { DocumentUploadArea } from './DocumentUploadArea';
-import { generateSlug, generateSlugFromFilename } from '@/lib/utils';
+import { generateSlug } from '@/lib/utils/slug.util';
 
 // Form validation schema
 const documentFormSchema = z.object({
@@ -31,23 +31,7 @@ const documentFormSchema = z.object({
       /^[a-z0-9-_]+$/,
       'Slug can only contain lowercase letters, numbers, hyphens, and underscores',
     ),
-  content_type: z.enum([
-    'presentation',
-    'research',
-    'pitch_deck',
-    'whitepaper',
-    'video',
-    'audio',
-    'image',
-    'report',
-    'document',
-    'spreadsheet',
-    'table',
-    'chart',
-    'infographic',
-    'case_study',
-    'other',
-  ] as const),
+  content_type: z.string().min(1, 'Content type is required'),
   description: z.string().optional(),
   is_public: z.boolean(),
 });
@@ -55,7 +39,7 @@ const documentFormSchema = z.object({
 type DocumentFormData = z.infer<typeof documentFormSchema>;
 
 interface DocumentFormProps {
-  document?: ProjectContentWithAuthor | null;
+  document?: ProjectDocumentWithAuthor | null;
   onSubmit: (data: DocumentFormData, files: File[]) => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
@@ -94,33 +78,47 @@ export function DocumentForm({
   const watchedSlug = watch('slug');
 
   // Handle file selection and auto-fill title/slug
-  const handleFilesSelect = (files: File[]) => {
+  const handleFilesSelect = async (files: File[]) => {
     setSelectedFiles(files);
 
-    // Auto-fill title and slug from first file if they're empty
     if (!isEditing && files.length > 0) {
       const currentTitle = watchedTitle;
       const currentSlug = watchedSlug;
 
       if (!currentTitle) {
         const filename = files[0].name;
-        const titleFromFile = filename.replace(/\.[^/.]+$/, ''); // Remove extension
+        const titleFromFile = filename.replace(/\.[^/.]+$/, '');
         setValue('title', titleFromFile);
       }
 
       if (!currentSlug) {
-        const slugFromFile = generateSlugFromFilename(files[0].name);
-        setValue('slug', slugFromFile);
+        const slugResponse = await generateSlug(files[0].name, {
+          removeFileExtension: true,
+          allowUnderscores: true,
+        });
+        if (slugResponse.data && !slugResponse.error) {
+          setValue('slug', slugResponse.data);
+        }
       }
     }
   };
 
   // Auto-generate slug from title
   useEffect(() => {
-    if (!isEditing && watchedTitle && !watchedSlug) {
-      const generatedSlug = generateSlug(watchedTitle);
-      setValue('slug', generatedSlug);
-    }
+    let isMounted = true;
+    const autoGenerate = async () => {
+      if (!isEditing && watchedTitle && !watchedSlug && isMounted) {
+        const slugResponse = await generateSlug(watchedTitle, { allowUnderscores: true });
+        if (slugResponse.data && !slugResponse.error && isMounted) {
+          setValue('slug', slugResponse.data);
+        }
+      }
+    };
+
+    autoGenerate();
+    return () => {
+      isMounted = false;
+    };
   }, [watchedTitle, watchedSlug, setValue, isEditing]);
 
   const handleFormSubmit = async (data: DocumentFormData) => {
@@ -253,7 +251,7 @@ export function DocumentForm({
                 </Text>
                 <Select.Root
                   value={watch('content_type')}
-                  onValueChange={(value: ContentType) => setValue('content_type', value)}
+                  onValueChange={(value: string) => setValue('content_type', value)}
                   disabled={isLoading}
                 >
                   <Select.Trigger placeholder="Select content type" />

@@ -83,11 +83,8 @@ export type CreateTeamMemberForm = z.infer<typeof createTeamMemberSchema>;
  * Schema for updating a team member
  */
 export const updateTeamMemberSchema = createTeamMemberSchema
-  .omit({ project_id: true })
-  .partial()
-  .extend({
-    id: z.string().uuid({ message: 'Invalid team member ID' }),
-  });
+  .omit({ project_id: true, author_id: true })
+  .partial();
 
 /**
  * Type for updating a team member

@@ -90,15 +90,12 @@ export function EditProjectContent({ project }: EditProjectContentProps) {
   const loadTeamMembers = useCallback(async () => {
     setTeamLoading(true);
     try {
-      const response = await fetch(`/api/projects/${project.id}/team-members`);
-      if (response.ok) {
-        const data = await response.json();
-        setTeamMembers(data.team_members || []);
-      } else {
-        console.error('Failed to load team members');
-      }
+      const { getTeamMembers } = await import('@/lib/api/team-api');
+      const teamMembers = await getTeamMembers(project.id);
+      setTeamMembers(teamMembers || []);
     } catch (error) {
       console.error('Error loading team members:', error);
+      setTeamMembers([]);
     } finally {
       setTeamLoading(false);
     }

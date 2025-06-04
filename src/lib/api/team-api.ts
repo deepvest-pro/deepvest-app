@@ -2,6 +2,7 @@
  * Team Member API client functions
  */
 
+import { APIClient } from '@/lib/utils/api';
 import type { TeamMemberWithAuthor } from '@/types/supabase';
 import type {
   CreateTeamMemberForm,
@@ -35,17 +36,15 @@ export const getTeamMembers = async (
     searchParams.append('search', filters.search);
   }
 
-  const url = `/api/projects/${projectId}/team-members${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
+  const url = `/projects/${projectId}/team-members${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
 
-  const response = await fetch(url);
+  const response = await APIClient.get<{ team_members: TeamMemberWithAuthor[] }>(url);
 
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || 'Failed to fetch team members');
+  if (!response.success || !response.data) {
+    throw new Error(response.error || 'Failed to fetch team members');
   }
 
-  const result = await response.json();
-  return result.team_members;
+  return response.data.team_members;
 };
 
 /**
@@ -55,15 +54,15 @@ export const getTeamMember = async (
   projectId: string,
   memberId: string,
 ): Promise<TeamMemberWithAuthor> => {
-  const response = await fetch(`/api/projects/${projectId}/team-members/${memberId}`);
+  const response = await APIClient.get<{ team_member: TeamMemberWithAuthor }>(
+    `/projects/${projectId}/team-members/${memberId}`,
+  );
 
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || 'Failed to fetch team member');
+  if (!response.success || !response.data) {
+    throw new Error(response.error || 'Failed to fetch team member');
   }
 
-  const result = await response.json();
-  return result.team_member;
+  return response.data.team_member;
 };
 
 /**
@@ -73,21 +72,16 @@ export const createTeamMember = async (
   projectId: string,
   teamMemberData: Omit<CreateTeamMemberForm, 'project_id' | 'author_id'>,
 ): Promise<TeamMemberWithAuthor> => {
-  const response = await fetch(`/api/projects/${projectId}/team-members`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(teamMemberData),
-  });
+  const response = await APIClient.post<{ team_member: TeamMemberWithAuthor }>(
+    `/projects/${projectId}/team-members`,
+    teamMemberData,
+  );
 
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || 'Failed to create team member');
+  if (!response.success || !response.data) {
+    throw new Error(response.error || 'Failed to create team member');
   }
 
-  const result = await response.json();
-  return result.team_member;
+  return response.data.team_member;
 };
 
 /**
@@ -98,34 +92,26 @@ export const updateTeamMember = async (
   memberId: string,
   updateData: Omit<UpdateTeamMemberForm, 'id'>,
 ): Promise<TeamMemberWithAuthor> => {
-  const response = await fetch(`/api/projects/${projectId}/team-members/${memberId}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(updateData),
-  });
+  const response = await APIClient.put<{ team_member: TeamMemberWithAuthor }>(
+    `/projects/${projectId}/team-members/${memberId}`,
+    updateData,
+  );
 
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || 'Failed to update team member');
+  if (!response.success || !response.data) {
+    throw new Error(response.error || 'Failed to update team member');
   }
 
-  const result = await response.json();
-  return result.team_member;
+  return response.data.team_member;
 };
 
 /**
  * Soft deletes a team member
  */
 export const deleteTeamMember = async (projectId: string, memberId: string): Promise<void> => {
-  const response = await fetch(`/api/projects/${projectId}/team-members/${memberId}`, {
-    method: 'DELETE',
-  });
+  const response = await APIClient.delete(`/projects/${projectId}/team-members/${memberId}`);
 
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || 'Failed to delete team member');
+  if (!response.success) {
+    throw new Error(response.error || 'Failed to delete team member');
   }
 };
 
@@ -141,20 +127,18 @@ export const bulkUpdateTeamMembers = async (
   affected_count: number;
   team_members: TeamMemberWithAuthor[];
 }> => {
-  const response = await fetch(`/api/projects/${projectId}/team-members/bulk`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(bulkData),
-  });
+  const response = await APIClient.post<{
+    success: boolean;
+    action: string;
+    affected_count: number;
+    team_members: TeamMemberWithAuthor[];
+  }>(`/projects/${projectId}/team-members/bulk`, bulkData);
 
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || 'Failed to perform bulk operation');
+  if (!response.success || !response.data) {
+    throw new Error(response.error || 'Failed to perform bulk operation');
   }
 
-  return response.json();
+  return response.data;
 };
 
 /**

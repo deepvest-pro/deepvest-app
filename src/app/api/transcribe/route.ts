@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { z } from 'zod';
+import { createAPIHandler } from '@/lib/api/base-handler';
+import { APIError } from '@/lib/api/middleware/auth';
 import {
-  TranscribeRequest,
   TranscribeResponse,
   GeminiRequest,
   GeminiResponse,
@@ -10,107 +11,11 @@ import {
   API_TIMEOUT,
 } from '@/types/transcribe';
 
-// CORS headers
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
-
 // Request validation schema
 const transcribeRequestSchema = z.object({
   url: z.string().url('Invalid URL format'),
   prompt: z.string().min(1, 'Prompt is required').max(2000, 'Prompt too long'),
 });
-
-/**
- * Handle CORS preflight requests
- */
-export async function OPTIONS() {
-  return new Response(null, { headers: corsHeaders });
-}
-
-/**
- * Main transcription endpoint
- */
-export async function POST(request: NextRequest) {
-  const startTime = Date.now();
-
-  try {
-    // Parse and validate request body
-    const body = await request.json();
-    const validationResult = transcribeRequestSchema.safeParse(body);
-
-    if (!validationResult.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Validation error: ${validationResult.error.errors
-            .map(e => e.message)
-            .join(', ')}`,
-        } as TranscribeResponse,
-        { status: 400, headers: corsHeaders },
-      );
-    }
-
-    const { url, prompt }: TranscribeRequest = validationResult.data;
-
-    // Check if Gemini API key is configured
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.error('GEMINI_API_KEY not configured');
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Transcription service not configured',
-        } as TranscribeResponse,
-        { status: 500, headers: corsHeaders },
-      );
-    }
-
-    // Download and validate file
-    const fileData = await downloadAndValidateFile(url);
-
-    // Send to Gemini API for transcription
-    const transcriptionResult = await transcribeWithGemini(
-      fileData.base64Data,
-      fileData.mimeType,
-      prompt,
-      apiKey,
-    );
-
-    const processingTime = Date.now() - startTime;
-
-    return NextResponse.json(
-      {
-        success: true,
-        result: transcriptionResult,
-        metadata: {
-          fileSize: fileData.fileSize,
-          mimeType: fileData.mimeType,
-          processingTime,
-        },
-      } as TranscribeResponse,
-      { headers: corsHeaders },
-    );
-  } catch (error) {
-    console.error('Transcription error:', error);
-
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    const processingTime = Date.now() - startTime;
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: errorMessage,
-        metadata: {
-          processingTime,
-        },
-      } as TranscribeResponse,
-      { status: 500, headers: corsHeaders },
-    );
-  }
-}
 
 /**
  * Download file from URL and validate it
@@ -120,7 +25,7 @@ async function downloadAndValidateFile(url: string) {
     // Validate URL format and prevent SSRF attacks
     const parsedUrl = new URL(url);
     if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-      throw new Error('Only HTTP and HTTPS URLs are supported');
+      throw new APIError('Only HTTP and HTTPS URLs are supported', 400);
     }
 
     // Download file with timeout
@@ -137,7 +42,7 @@ async function downloadAndValidateFile(url: string) {
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+      throw new APIError(`Failed to download file: ${response.status} ${response.statusText}`, 400);
     }
 
     // Check content type
@@ -145,13 +50,16 @@ async function downloadAndValidateFile(url: string) {
     const mimeType = contentType.split(';')[0].trim();
 
     if (!Object.keys(SUPPORTED_MIME_TYPES).includes(mimeType)) {
-      throw new Error(`Unsupported file type: ${mimeType}`);
+      throw new APIError(`Unsupported file type: ${mimeType}`, 400);
     }
 
     // Check file size
     const contentLength = response.headers.get('content-length');
     if (contentLength && parseInt(contentLength) > MAX_FILE_SIZE) {
-      throw new Error(`File too large: ${contentLength} bytes (max: ${MAX_FILE_SIZE} bytes)`);
+      throw new APIError(
+        `File too large: ${contentLength} bytes (max: ${MAX_FILE_SIZE} bytes)`,
+        400,
+      );
     }
 
     // Download file data
@@ -159,7 +67,7 @@ async function downloadAndValidateFile(url: string) {
     const fileSize = arrayBuffer.byteLength;
 
     if (fileSize > MAX_FILE_SIZE) {
-      throw new Error(`File too large: ${fileSize} bytes (max: ${MAX_FILE_SIZE} bytes)`);
+      throw new APIError(`File too large: ${fileSize} bytes (max: ${MAX_FILE_SIZE} bytes)`, 400);
     }
 
     // Convert to base64
@@ -171,13 +79,16 @@ async function downloadAndValidateFile(url: string) {
       fileSize,
     };
   } catch (error) {
-    if (error instanceof Error) {
-      if (error.name === 'AbortError') {
-        throw new Error('File download timeout');
-      }
+    if (error instanceof APIError) {
       throw error;
     }
-    throw new Error('Failed to download file');
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        throw new APIError('File download timeout', 408);
+      }
+      throw new APIError(`File download failed: ${error.message}`, 400);
+    }
+    throw new APIError('Failed to download file', 400);
   }
 }
 
@@ -231,14 +142,14 @@ async function transcribeWithGemini(
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+      throw new APIError(`Gemini API error: ${response.status} ${response.statusText}`, 500);
     }
 
     const data: GeminiResponse = await response.json();
 
     // Handle API errors
     if (data.error) {
-      throw new Error(`Gemini API error: ${data.error.message}`);
+      throw new APIError(`Gemini API error: ${data.error.message}`, 500);
     }
 
     // Extract response text
@@ -252,14 +163,54 @@ async function transcribeWithGemini(
       }
     }
 
-    throw new Error('No transcription result received from Gemini API');
+    throw new APIError('No transcription result received from Gemini API', 500);
   } catch (error) {
-    if (error instanceof Error) {
-      if (error.name === 'AbortError') {
-        throw new Error('Gemini API request timeout');
-      }
+    if (error instanceof APIError) {
       throw error;
     }
-    throw new Error('Failed to transcribe with Gemini API');
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        throw new APIError('Gemini API request timeout', 408);
+      }
+      throw new APIError(`Gemini API error: ${error.message}`, 500);
+    }
+    throw new APIError('Failed to transcribe with Gemini API', 500);
   }
 }
+
+/**
+ * Main transcription endpoint
+ */
+export const POST = createAPIHandler(async (request: NextRequest) => {
+  // Parse and validate request body
+  const body = await request.json();
+  const validatedData = transcribeRequestSchema.parse(body);
+  const { url, prompt } = validatedData;
+
+  // Check if Gemini API key is configured
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new APIError('Transcription service not configured', 500);
+  }
+
+  // Download and validate file
+  const fileData = await downloadAndValidateFile(url);
+
+  // Send to Gemini API for transcription
+  const transcriptionResult = await transcribeWithGemini(
+    fileData.base64Data,
+    fileData.mimeType,
+    prompt,
+    apiKey,
+  );
+
+  // Return response with metadata
+  return {
+    result: transcriptionResult,
+    metadata: {
+      fileSize: fileData.fileSize,
+      mimeType: fileData.mimeType,
+      model: 'gemini-2.0-flash',
+    },
+  } as Omit<TranscribeResponse, 'success'>;
+});

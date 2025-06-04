@@ -60,8 +60,17 @@ CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 DECLARE
   default_nickname TEXT;
+  user_nickname TEXT;
 BEGIN
-  default_nickname := split_part(NEW.email, '@', 1) || floor(random() * 1000)::text;
+  -- Try to get nickname from user metadata first
+  user_nickname := (NEW.raw_user_meta_data->>'nickname')::TEXT;
+  
+  -- If no nickname in metadata, generate default from email
+  IF user_nickname IS NULL OR user_nickname = '' THEN
+    default_nickname := split_part(NEW.email, '@', 1) || floor(random() * 1000)::text;
+  ELSE
+    default_nickname := user_nickname;
+  END IF;
   
   INSERT INTO public.user_profiles (
     id,
@@ -86,7 +95,7 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER; -- SECURITY DEFINER is important for accessing NEW.email etc.
-COMMENT ON FUNCTION public.handle_new_user() IS 'Trigger function to automatically create a user profile upon new user registration in auth.users.';
+COMMENT ON FUNCTION public.handle_new_user() IS 'Trigger function to automatically create a user profile upon new user registration in auth.users. Uses nickname from metadata if provided, otherwise generates from email.';
 
 -- Trigger for new user creation
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;

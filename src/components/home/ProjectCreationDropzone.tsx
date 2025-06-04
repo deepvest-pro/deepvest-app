@@ -13,7 +13,7 @@ import {
 } from '@radix-ui/react-icons';
 import { useToastHelpers } from '@/components/layout/ToastProvider';
 import type { ProjectDataFromAI } from '@/types/ai';
-import { generateUniqueSlug } from '@/lib/validations/project';
+import { generateSlug } from '@/lib/utils/slug.util';
 import { validateFile } from '@/lib/utils/file-validation';
 import { generateTemporaryProjectData, splitProjectData } from '@/lib/utils/project-helpers';
 import {
@@ -27,7 +27,7 @@ import {
   generateProjectData,
   updateDocument,
   createTeamFromAI,
-} from '@/lib/api/project-api';
+} from '@/lib/api/project-client-api';
 
 type ProcessingStep =
   | 'idle'
@@ -79,7 +79,7 @@ export function ProjectCreationDropzone() {
 
       // Generate unique slug if name is provided
       if (projectData.name) {
-        const uniqueSlug = await generateUniqueSlug(projectData.name);
+        const uniqueSlug = await generateSlug(projectData.name);
         projectFields.slug = uniqueSlug;
       }
 

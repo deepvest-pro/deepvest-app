@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation';
 import { getUserWithProfile } from '@/lib/supabase/client';
 import { NewProjectPageContent } from '@/components/projects/NewProjectPageContent';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = {
   title: 'Create New Project | DeepVest',
   description: 'Create a new project on DeepVest platform',
