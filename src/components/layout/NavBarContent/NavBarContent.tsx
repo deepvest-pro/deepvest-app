@@ -1,11 +1,13 @@
 'use client';
 
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Flex, Box, Text, Avatar, Button } from '@radix-ui/themes';
 import { UserData } from '@/types/auth';
 import { SignOutButton } from '@/components/auth';
 import { MobileMenu } from '../MobileMenu/MobileMenu';
+import { useCivicAuth } from '@/lib/hooks/useCivicAuth';
 
 interface NavBarContentProps {
   userData: UserData | null;
@@ -14,6 +16,26 @@ interface NavBarContentProps {
 }
 
 export function NavBarContent({ userData, isAuthenticated }: NavBarContentProps) {
+  const { signIn } = useCivicAuth();
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Use effect to reload page when loading state changes to false
+  useEffect(() => {
+    // If isLoading becomes false, immediately reload the page
+    // if (isLoading != lastLoading && isLoading == false) {
+    //   console.log('Loading complete, reloading page...');
+    //   window.location.reload();
+    // }
+  }, [isLoading]);
+  
+  const handleCivicLogin = async () => {
+    setIsLoading(true);
+    // Only need to call signIn, the useEffect will handle page reload after loading completes
+    await signIn('/projects', () => {
+      console.log('Auth complete, executing callback');
+      window.location.reload();
+    });
+  };
   return (
     <Box
       style={{
@@ -130,21 +152,21 @@ export function NavBarContent({ userData, isAuthenticated }: NavBarContentProps)
             </Flex>
           ) : (
             <Flex gap="3" align="center">
-              <Link href="/auth/sign-in">
-                <span className="inline-block">
-                  <Button
-                    variant="ghost"
-                    color="green"
-                    size="3"
-                    style={{
-                      fontWeight: '500',
-                      transition: 'all 0.2s ease',
-                    }}
-                  >
-                    Sign In
-                  </Button>
-                </span>
-              </Link>
+              <span className="inline-block">
+                <Button
+                  variant="ghost"
+                  color="green"
+                  size="3"
+                  style={{
+                    fontWeight: '500',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onClick={handleCivicLogin}
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Logging in...' : 'Sign In'}
+                </Button>
+              </span>
               <Link href="/auth/sign-up">
                 <span className="inline-block">
                   <Button

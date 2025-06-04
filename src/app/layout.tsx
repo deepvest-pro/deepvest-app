@@ -4,6 +4,7 @@ import { Providers } from '@/lib/auth/providers';
 import { getUserData } from '@/lib/react-query/auth-actions';
 import { RootLayoutContent } from '@/components/layout';
 import { NavBar } from '@/components/layout/NavBar/NavBar';
+import { CivicAuthProvider } from "@civic/auth-web3/nextjs";
 
 import '../styles/global/globals.css';
 import '../styles/app.scss';
@@ -33,12 +34,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en">
       <body>
-        <Providers initialSession={null} initialUser={userData}>
-          <RootLayoutContent>
-            <NavBar />
-            <main style={{ flex: '1 1 auto' }}>{children}</main>
-          </RootLayoutContent>
-        </Providers>
+        <CivicAuthProvider>
+          <Providers initialSession={null} initialUser={userData}>
+            <RootLayoutContent>
+              <NavBar />
+              <main style={{ flex: '1 1 auto' }}>{children}</main>
+            </RootLayoutContent>
+          </Providers>
+        </CivicAuthProvider>
       </body>
     </html>
   );
