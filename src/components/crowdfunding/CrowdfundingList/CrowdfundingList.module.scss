@@ -1,0 +1,266 @@
+@use '../../../styles/variables' as *;
+@use '../../../styles/mixins/breakpoints' as *;
+
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+
+  @include mobile {
+    padding: 0 16px;
+  }
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 24px;
+
+  @include mobile {
+    margin-bottom: 32px;
+  }
+}
+
+.title {
+  font-size: 48px;
+  font-weight: 800;
+  background: var(--gradient-hero);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 16px;
+  line-height: 1.2;
+
+  @include mobile {
+    font-size: 36px;
+    margin-bottom: 12px;
+  }
+
+  @include tablet {
+    font-size: 42px;
+  }
+}
+
+.subtitle {
+  font-size: 20px;
+  color: var(--text-secondary);
+  margin-bottom: 32px;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.5;
+
+  @include mobile {
+    font-size: 16px;
+    margin-bottom: 24px;
+  }
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 32px;
+  margin-bottom: 32px;
+  padding: 32px;
+  background: var(--gradient-card);
+  border-radius: 16px;
+  border: 1px solid rgba(0, 168, 107, 0.1);
+
+  @include mobile {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+    padding: 24px;
+    margin-bottom: 48px;
+  }
+
+  @include tablet {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 28px;
+  }
+}
+
+.stat {
+  text-align: center;
+}
+
+.statValue {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--flow-green);
+  display: block;
+  margin-bottom: 8px;
+
+  @include mobile {
+    font-size: 24px;
+    margin-bottom: 6px;
+  }
+}
+
+.statLabel {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+
+  @include mobile {
+    font-size: 12px;
+  }
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+
+  @include mobile {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+}
+
+.sectionTitle {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+
+  @include mobile {
+    font-size: 24px;
+  }
+}
+
+.sectionDescription {
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+
+  @include mobile {
+    font-size: 14px;
+    margin-top: 6px;
+  }
+}
+
+.filters {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+
+  @include mobile {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+.filterButton {
+  padding: 8px 16px;
+  border: 1px solid var(--gray-6);
+  border-radius: 8px;
+  background: var(--gray-1);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: var(--flow-green);
+    color: var(--flow-green);
+  }
+
+  &.active {
+    background: var(--flow-green);
+    border-color: var(--flow-green);
+    color: white;
+  }
+
+  @include mobile {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 32px;
+  margin-bottom: 64px;
+
+  @include mobile {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    margin-bottom: 48px;
+  }
+
+  @include tablet {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 28px;
+  }
+
+  @include desktop {
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  }
+}
+
+.loadingState {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 64px 0;
+  color: var(--text-secondary);
+}
+
+.emptyState {
+  text-align: center;
+  padding: 64px 0;
+  color: var(--text-secondary);
+
+  .emptyIcon {
+    margin-bottom: 16px;
+    color: var(--gray-8);
+  }
+
+  .emptyTitle {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .emptyDescription {
+    font-size: 16px;
+    color: var(--text-secondary);
+  }
+}
+
+.loadMore {
+  display: flex;
+  justify-content: center;
+  margin-top: 48px;
+
+  button {
+    padding: 12px 32px;
+    background: var(--flow-green);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: var(--flow-green-dark);
+      transform: translateY(-2px);
+    }
+
+    &:disabled {
+      background: var(--gray-6);
+      cursor: not-allowed;
+      transform: none;
+    }
+  }
+}

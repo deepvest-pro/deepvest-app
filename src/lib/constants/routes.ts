@@ -31,6 +31,7 @@ export const ROUTES = {
   },
 
   leaderboard: '/leaderboard',
+  crowdfunding: '/crowdfunding',
 } as const;
 
 /**
@@ -140,6 +141,7 @@ export const NAVIGATION = {
     { label: 'Home', href: ROUTES.home },
     { label: 'Projects', href: ROUTES.projects.list },
     { label: 'Leaderboard', href: ROUTES.leaderboard },
+    { label: 'Crowdfunding', href: ROUTES.crowdfunding },
   ],
 
   auth: [

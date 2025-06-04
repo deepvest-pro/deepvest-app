@@ -134,7 +134,7 @@ export function CommonInfoSection({
       }
 
       const result = await response.json();
-      logoUrl = result.imageUrl;
+      logoUrl = result.data?.imageUrl || result.imageUrl;
       setCurrentLogoUrl(logoUrl);
       setSelectedLogoFile(null);
     }
@@ -155,7 +155,7 @@ export function CommonInfoSection({
       }
 
       const result = await response.json();
-      bannerUrl = result.imageUrl;
+      bannerUrl = result.data?.imageUrl || result.imageUrl;
       setCurrentBannerUrl(bannerUrl);
       setSelectedBannerFile(null);
     }

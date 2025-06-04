@@ -103,6 +103,14 @@ export function MobileMenu({ userData, isAuthenticated }: MobileMenuProps) {
               </Box>
             </Link>
 
+            <Link href="/crowdfunding" onClick={closeMenu}>
+              <Box className={styles.navLink}>
+                <Text weight="medium" size="3" className={styles.navLinkText}>
+                  Crowdfunding
+                </Text>
+              </Box>
+            </Link>
+
             {isAuthenticated && (
               <Link href="/profile" onClick={closeMenu}>
                 <Box className={styles.navLink}>

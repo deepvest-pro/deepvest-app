@@ -93,7 +93,13 @@ export async function POST(request: NextRequest) {
     const iterations = Math.min(body.iterations || 3, 10); // Max 10 iterations
 
     // Run multiple checks to verify consistency
-    const results: Array<Record<string, any>> = [];
+    const results: Array<{
+      iteration: number;
+      clientIsolation: Awaited<ReturnType<typeof fullSessionIsolationCheck>>['clientIsolation'];
+      userInfo: Awaited<ReturnType<typeof fullSessionIsolationCheck>>['userInfo'];
+      recommendations: string[];
+    }> = [];
+
     for (let i = 0; i < iterations; i++) {
       const result = await fullSessionIsolationCheck();
       results.push({

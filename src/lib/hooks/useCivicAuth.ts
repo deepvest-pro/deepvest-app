@@ -16,12 +16,12 @@ import { linkCivicWithSupabase } from '@/lib/auth/civic-auth-helpers';
  */
 export function useCivicDebug(enable = true) {
   const { user } = useUser();
-  const tokenContext = useToken();
-  
+  const tokenContext = useSafeToken();
+
   useEffect(() => {
     if (!enable) return;
     console.log('[Civic Debug] User updated:', user);
-    
+
     if (user) {
       // Log important user properties
       console.log('[Civic Debug] User details:', {
@@ -33,22 +33,24 @@ export function useCivicDebug(enable = true) {
       console.log('[Civic Debug] User is null');
     }
   }, [user, enable]);
-  
+
   useEffect(() => {
     if (!enable) return;
     console.log('[Civic Debug] Token context updated');
-    
+
     // Safely inspect the token context
     if (tokenContext) {
-      // Type assertion to any to allow property inspection
-      const tokenAny = tokenContext as any;
-      
+      // Type assertion to unknown to allow property inspection
+      const tokenAny = tokenContext as Record<string, unknown>;
+
       // Log all available methods and properties safely
-      console.log('[Civic Debug] Token context methods:', 
-        Object.getOwnPropertyNames(tokenContext)
-          .filter(name => typeof tokenAny[name] === 'function')
+      console.log(
+        '[Civic Debug] Token context methods:',
+        Object.getOwnPropertyNames(tokenContext).filter(
+          name => typeof tokenAny[name] === 'function',
+        ),
       );
-      
+
       // Attempt to safely access any token data
       Object.keys(tokenAny).forEach(key => {
         try {
@@ -60,7 +62,7 @@ export function useCivicDebug(enable = true) {
               console.log(`[Civic Debug] ${key}:`, value);
             }
           }
-        } catch (e) {
+        } catch {
           // Ignore errors when accessing properties
         }
       });
@@ -68,8 +70,20 @@ export function useCivicDebug(enable = true) {
       console.log('[Civic Debug] Token context is null');
     }
   }, [tokenContext, enable]);
-  
+
   return { user, tokenContext };
+}
+
+/**
+ * Safe wrapper for useToken that handles cases where TokenProvider might not be available
+ */
+function useSafeToken() {
+  try {
+    return useToken();
+  } catch (error) {
+    console.warn('useToken not available, likely TokenProvider not found:', error);
+    return null;
+  }
 }
 
 let previousEmail: string | null | undefined = undefined;
@@ -77,32 +91,36 @@ let authCompleteCallback: (() => void) | null = null;
 
 export function useCivicAuth() {
   const { signIn: civicSignIn, signOut: civicSignOut, user: civicUser } = useUser();
-  const civicTokenContext = useToken();
+  // const civicTokenContext = useSafeToken();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isLinked, setIsLinked] = useState(false);
+  // const [isLinked, setIsLinked] = useState(false);
   const [redirectPath, setRedirectPath] = useState<string | null>(null);
   const router = useRouter();
-  
+
   // Enable debug monitoring
   useCivicDebug();
-  
+
   // Handle Supabase linking when user or token changes
   useEffect(() => {
     // Only proceed if we have both a user and are not already in the linking process
     if (civicUser && !isLoading) {
       const currentEmail = civicUser.email;
-      
+
       // Only link if:
       // 1. We haven't linked this user before OR
       // 2. The email has changed
       if (currentEmail && previousEmail !== null && currentEmail != previousEmail) {
-        console.log('User state change detected - attempting to link with Supabase ' + currentEmail + ' ' + previousEmail);
+        console.log(
+          'User state change detected - attempting to link with Supabase ' +
+            currentEmail +
+            ' ' +
+            previousEmail,
+        );
         previousEmail = currentEmail;
         // Perform linking asynchronously
         const linkUser = async () => {
           try {
-            
             // Extract user data
             const email = civicUser.email;
             const idToken = civicUser.id;
@@ -111,126 +129,136 @@ export function useCivicAuth() {
               console.error('Cannot link: No email found in Civic user');
               return;
             }
-            
+
             if (!idToken) {
               console.error('Cannot link: No ID found in Civic user');
               return;
             }
-            
-            console.log('Linking with Supabase:', { 
-              email, 
-              idToken: idToken.substring(0, 10) + '...' 
+
+            console.log('Linking with Supabase:', {
+              email,
+              idToken: idToken.substring(0, 10) + '...',
             });
-            
-            
+
             // Link with Supabase
             const result = await linkCivicWithSupabase(email, idToken);
             if (!result.success) {
               throw new Error(result.error);
             }
-            
+
             // Mark as linked and store the email
-            setIsLinked(true);
-            
+            // setIsLinked(true);
+
             // Execute callback if provided
             if (authCompleteCallback != null) {
               console.log('Auth complete, executing callback12');
               authCompleteCallback();
               authCompleteCallback = null;
             }
-            
+
             // Handle redirect if needed
             if (redirectPath) {
               router.push(redirectPath);
               setRedirectPath(null); // Clear the redirect path
             }
-          } catch (err: any) {
+          } catch (err: unknown) {
             console.error('Civic-Supabase linking error:', err);
-            setError(err.message || 'Failed to link Civic account with Supabase');
+            const errorMessage =
+              err instanceof Error ? err.message : 'Failed to link Civic account with Supabase';
+            setError(errorMessage);
           } finally {
             setIsLoading(false);
           }
         };
-        
+
         linkUser();
       }
     }
-  }, [civicUser, router]);
+  }, [civicUser, router, isLoading, redirectPath]);
 
   /**
    * Sign in with Civic and link with Supabase
    * This function handles the authentication flow:
    * 1. Authenticate with Civic
    * 2. Store redirect path if provided (actual redirect happens in the useEffect)
-   * 
+   *
    * The linking with Supabase and redirect happen automatically via useEffect
    * when the civicUser becomes available
-   * 
+   *
    * @param redirectTo Optional path to redirect to after successful login
    * @param onAuthComplete Optional callback to be executed when authentication is fully complete
    */
-  const signIn = useCallback(async (redirectTo?: string, onAuthComplete?: () => void) => {
-    try {
-      setIsLoading(true);
-      setError(null);
+  const signIn = useCallback(
+    async (redirectTo?: string, onAuthComplete?: () => void) => {
+      try {
+        setIsLoading(true);
+        setError(null);
 
-      // Store the redirect path for use after successful auth
-      if (redirectTo) {
-        setRedirectPath(redirectTo);
+        // Store the redirect path for use after successful auth
+        if (redirectTo) {
+          setRedirectPath(redirectTo);
+        }
+
+        // Store the callback for use when auth is complete
+        if (onAuthComplete) {
+          authCompleteCallback = onAuthComplete;
+        }
+
+        // Step 1: Authenticate with Civic
+        await civicSignIn();
+        console.log('Civic sign-in triggered');
+
+        // The rest of the flow (linking with Supabase and redirect)
+        // is handled by the useEffect when civicUser becomes available
+
+        return true;
+      } catch (err: unknown) {
+        console.error('Civic authentication error:', err);
+        const errorMessage =
+          err instanceof Error ? err.message : 'Failed to authenticate with Civic';
+        setError(errorMessage);
+        return false;
+      } finally {
+        setIsLoading(false);
       }
-
-      // Store the callback for use when auth is complete
-      if (onAuthComplete) {
-        authCompleteCallback = onAuthComplete;
-      }
-
-      // Step 1: Authenticate with Civic
-      await civicSignIn();
-      console.log('Civic sign-in triggered');
-      
-      // The rest of the flow (linking with Supabase and redirect)
-      // is handled by the useEffect when civicUser becomes available
-
-      return true;
-    } catch (err: any) {
-      console.error('Civic authentication error:', err);
-      setError(err.message || 'Failed to authenticate with Civic');
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [civicSignIn]);
+    },
+    [civicSignIn],
+  );
 
   /**
    * Sign out from both Civic and Supabase
    * This performs a complete logout
-   * 
+   *
    * @param redirectTo Optional path to redirect to after signing out
    */
-  const signOut = useCallback(async (redirectTo?: string) => {
-    try {
-      setIsLoading(true);
-      
-      // Sign out from Civic
-      await civicSignOut();
-      
-      // Sign out from Supabase by calling a server action or API
-      // This could be implemented as needed, potentially with a fetch to a logout endpoint
-      
-      // Redirect if needed
-      if (redirectTo) {
-        router.push(redirectTo);
+  const signOut = useCallback(
+    async (redirectTo?: string) => {
+      try {
+        setIsLoading(true);
+
+        // Sign out from Civic
+        await civicSignOut();
+
+        // Sign out from Supabase by calling a server action or API
+        // This could be implemented as needed, potentially with a fetch to a logout endpoint
+
+        // Redirect if needed
+        if (redirectTo) {
+          router.push(redirectTo);
+        }
+
+        return true;
+      } catch (err: unknown) {
+        console.error('Sign out error:', err);
+        const errorMessage = err instanceof Error ? err.message : 'Failed to sign out';
+        setError(errorMessage);
+        return false;
+      } finally {
+        setIsLoading(false);
       }
-      
-      return true;
-    } catch (err: any) {
-      console.error('Sign out error:', err);
-      setError(err.message || 'Failed to sign out');
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [civicSignOut, router]);
+    },
+    [civicSignOut, router],
+  );
 
   return {
     signIn,

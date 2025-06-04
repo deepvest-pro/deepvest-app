@@ -3,40 +3,39 @@ import { NextRequest, NextResponse } from 'next/server';
 import { SupabaseClientFactory } from '@/lib/supabase/client-factory';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
-import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Simplified Civic token verification function that always returns true
  * This is a simplified version as requested - in a real production environment,
  * you would implement proper token validation
  */
-async function verifyCivicToken(payload: { email: string, idToken: string }): Promise<{
+async function verifyCivicToken(payload: { email: string; idToken: string }): Promise<{
   isValid: boolean;
   verifiedEmail?: string;
   verifiedCivicID?: string;
-  civicUserData?: Record<string, any>;
+  civicUserData?: Record<string, unknown>;
   error?: string;
 }> {
   // Simple implementation that always returns true with the provided email
   if (!payload || !payload.email || !payload.idToken) {
-    return { isValid: false, error: "Email and idToken are required" };
+    return { isValid: false, error: 'Email and idToken are required' };
   }
-  
+
   // Validate email format
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   if (!emailRegex.test(payload.email)) {
     return { isValid: false, error: `Invalid email format: ${payload.email}` };
   }
-  
+
   // Always return true with the provided credentials
   return {
     isValid: true,
     verifiedEmail: payload.email,
     verifiedCivicID: payload.idToken,
-    civicUserData: { 
+    civicUserData: {
       username: payload.email.split('@')[0], // Generate a username from the email
-      provider: 'civic'
-    }
+      provider: 'civic',
+    },
   };
 }
 
@@ -44,7 +43,7 @@ async function verifyCivicToken(payload: { email: string, idToken: string }): Pr
 // Ensure SUPABASE_SERVICE_ROLE_KEY is set in your environment variables
 const supabaseAdmin = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 export async function POST(request: NextRequest) {
@@ -55,30 +54,33 @@ export async function POST(request: NextRequest) {
     // If 'auto' is provided, in a real implementation we would extract the token from session
     // Since we're simplifying, we'll expect the actual email and idToken
     let { email, idToken } = await request.json();
-    
+
     // Ensure email is a valid format (fallback in case validation fails)
     if (!email || email === 'auto') {
       // Default to a valid email domain for testing
       email = `test-user-${Date.now()}@example.org`;
     }
-    
+
     if (!idToken || idToken === 'auto') {
       // Default to a placeholder token
       idToken = `civic-token-${Date.now()}`;
     }
-    
+
     // Verify the token (simplified implementation)
-    const { 
-      isValid, 
-      verifiedEmail, 
-      verifiedCivicID, 
-      civicUserData, 
-      error: verificationError 
+    const {
+      isValid,
+      verifiedEmail,
+      verifiedCivicID,
+      civicUserData,
+      error: verificationError,
     } = await verifyCivicToken({ email, idToken });
 
     if (!isValid || !verifiedEmail) {
       console.error('Civic token verification failed:', verificationError);
-      return NextResponse.json({ error: verificationError || 'Invalid Civic token.' }, { status: 401 });
+      return NextResponse.json(
+        { error: verificationError || 'Invalid Civic token.' },
+        { status: 401 },
+      );
     }
 
     // Generate a password based on the user's email
@@ -87,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     // Check if user exists in Supabase
     const { data: existingUsers, error: getUserError } = await supabaseAdmin.auth.admin.listUsers();
-    
+
     // Filter the users to find the one with the matching email
     const matchingUsers = existingUsers?.users.filter(user => user.email === verifiedEmail);
 
@@ -100,10 +102,18 @@ export async function POST(request: NextRequest) {
 
     if (matchingUsers && matchingUsers.length > 0) {
       // User exists, update their password and sign them in
-      const userId = matchingUsers[0].id;
-      
+      const existingUser = matchingUsers[0];
+
       // Update the user's password using admin API
- 
+      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+        existingUser.id,
+        { password: securePassword },
+      );
+
+      if (updateError) {
+        console.error('Error updating user password:', updateError);
+        return NextResponse.json({ error: 'Failed to update user credentials' }, { status: 500 });
+      }
 
       // Sign in the user with their new password
       authResponse = await supabaseRegularClient.auth.signInWithPassword({
@@ -120,7 +130,7 @@ export async function POST(request: NextRequest) {
             civic_id: verifiedCivicID,
             // Add additional user metadata from civicUserData as needed
             username: civicUserData?.username,
-            auth_provider: 'civic'
+            auth_provider: 'civic',
           },
         },
       });
@@ -128,18 +138,22 @@ export async function POST(request: NextRequest) {
 
     if (authResponse.error) {
       console.error('Supabase auth error:', authResponse.error);
+      console.error('Auth response data:', authResponse.data);
+      console.error('Attempted email:', verifiedEmail);
+      console.error('Password length:', securePassword.length);
       return NextResponse.json({ error: authResponse.error.message }, { status: 500 });
     }
 
     // User is now authenticated with Supabase
-    return NextResponse.json({ 
-      success: true, 
-      user: authResponse.data.user, 
+    return NextResponse.json({
+      success: true,
+      user: authResponse.data.user,
       session: authResponse.data.session,
-      passwordUsed: securePassword // Include the password for debugging (remove in production)
+      passwordUsed: securePassword, // Include the password for debugging (remove in production)
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Civic-Supabase login API error:', error);
-    return NextResponse.json({ error: error.message || 'An unexpected error occurred.' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

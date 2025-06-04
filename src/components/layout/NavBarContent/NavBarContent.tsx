@@ -115,6 +115,22 @@ export function NavBarContent({ userData, isAuthenticated }: NavBarContentProps)
                 </Text>
               </span>
             </Link>
+            <Link href="/crowdfunding">
+              <span className="inline-block">
+                <Text
+                  weight="medium"
+                  size="3"
+                  style={{
+                    color: 'var(--text-secondary)',
+                    transition: 'color 0.2s ease',
+                    cursor: 'pointer',
+                  }}
+                  className="hover:text-[var(--flow-green)]"
+                >
+                  Crowdfunding
+                </Text>
+              </span>
+            </Link>
           </Flex>
 
           {isAuthenticated ? (

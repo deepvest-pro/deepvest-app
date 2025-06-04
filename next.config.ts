@@ -1,4 +1,4 @@
-import { createCivicAuthPlugin } from "@civic/auth-web3/nextjs";
+import { createCivicAuthPlugin } from '@civic/auth-web3/nextjs';
 import type { NextConfig } from 'next';
 import type { RemotePattern } from 'next/dist/shared/lib/image-config';
 
@@ -51,7 +51,7 @@ const baseNextConfig: NextConfig = {
 };
 
 const withCivicAuth = createCivicAuthPlugin({
-  clientId: "00ca0249-682b-4d05-bfc0-3fee6046676d", // Civic Client ID
+  clientId: process.env.CIVIC_CLIENT_ID!, // Civic Client ID from .env
   // Add other Civic config options here if needed
 });
 

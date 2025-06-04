@@ -3,6 +3,7 @@ export * from './auth';
 export * from './ai';
 export * from './supabase';
 export * from './transcribe';
+export * from './crowdfunding';
 
 // Re-export commonly used API types
 export type { APIResponse } from '@/lib/api/base-handler';
