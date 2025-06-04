@@ -361,13 +361,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // Generate markdown content for analysis
     const markdownContent = generateProjectMarkdown(project, snapshot, projectContent, teamMembers);
 
-    // Log the markdown content to console
-    console.log('='.repeat(80));
-    console.log('PROJECT SCORING DATA COLLECTION');
-    console.log('='.repeat(80));
-    console.log(markdownContent);
-    console.log('='.repeat(80));
-
     // Check if Gemini API key is configured
     const apiKey = process.env.GEMINI_API_KEY;
     let llmResponse: string | null = null;
@@ -382,19 +375,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           PROJECT_DATA: markdownContent,
         });
 
-        console.log('='.repeat(80));
-        console.log('SENDING TO LLM FOR SCORING');
-        console.log('='.repeat(80));
-        console.log('Prompt length:', scoringPrompt.length);
-
         // Generate scoring using Gemini API
         llmResponse = await generateWithGemini(scoringPrompt, apiKey);
-
-        console.log('='.repeat(80));
-        console.log('LLM SCORING RESPONSE');
-        console.log('='.repeat(80));
-        console.log(llmResponse);
-        console.log('='.repeat(80));
 
         // Parse LLM response
         parsedScoring = parseLLMResponse(llmResponse);

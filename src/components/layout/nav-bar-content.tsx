@@ -35,14 +35,9 @@ export function NavBarContent({ userData, isAuthenticated }: NavBarContentProps)
               <Text color="gray">Projects</Text>
             </span>
           </Link>
-          <Link href="/explore">
+          <Link href="/leaderboard">
             <span className="inline-block">
-              <Text color="gray">Explore</Text>
-            </span>
-          </Link>
-          <Link href="/about">
-            <span className="inline-block">
-              <Text color="gray">About</Text>
+              <Text color="gray">Leaderboard</Text>
             </span>
           </Link>
 

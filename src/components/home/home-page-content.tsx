@@ -1,17 +1,10 @@
 'use client';
 
-import { ReactNode } from 'react';
 import Link from 'next/link';
-import { Container, Flex, Heading, Text, Grid, Card, Box, Button } from '@radix-ui/themes';
-import { ToastTester } from './ToastTester';
+import { Container, Flex, Heading, Text, Grid, Card, Box } from '@radix-ui/themes';
 import { ProjectCreationDropzone } from './ProjectCreationDropzone';
 
-interface HomePageContentProps {
-  isAuthenticated: boolean;
-  authStatusContent: ReactNode;
-}
-
-export function HomePageContent({ isAuthenticated, authStatusContent }: HomePageContentProps) {
+export function HomePageContent() {
   return (
     <Container size="3" py="8">
       <Flex direction="column" align="center" mb="8" gap="4">
@@ -21,46 +14,6 @@ export function HomePageContent({ isAuthenticated, authStatusContent }: HomePage
         <Text size="5" color="gray" align="center" mb="4">
           The modern investment platform for connecting founders and investors
         </Text>
-
-        <Box mb="4">{authStatusContent}</Box>
-
-        {!isAuthenticated ? (
-          <Flex gap="4" justify="center" direction={{ initial: 'column', sm: 'row' }}>
-            <Link href="/auth/sign-up">
-              <span>
-                <Button size="3" color="blue">
-                  Create an Account
-                </Button>
-              </span>
-            </Link>
-            <Link href="/auth/sign-in">
-              <span>
-                <Button size="3" variant="outline">
-                  Sign In
-                </Button>
-              </span>
-            </Link>
-          </Flex>
-        ) : (
-          <Flex gap="4" justify="center" direction={{ initial: 'column', sm: 'row' }}>
-            <Link href="/projects">
-              <span>
-                <Button size="3" color="blue">
-                  Explore Projects
-                </Button>
-              </span>
-            </Link>
-            <Link href="/profile">
-              <span>
-                <Button size="3" variant="outline">
-                  View Profile
-                </Button>
-              </span>
-            </Link>
-          </Flex>
-        )}
-
-        <ToastTester />
       </Flex>
 
       {/* Project Creation Dropzone */}
@@ -75,9 +28,9 @@ export function HomePageContent({ isAuthenticated, authStatusContent }: HomePage
             <Text color="gray" align="center" mb="3">
               Showcase your projects to potential investors and secure the funding you need to grow.
             </Text>
-            <Link href="/founders">
+            <Link href="/projects/new">
               <span>
-                <Text color="blue">Learn more</Text>
+                <Text color="blue">Create a Project</Text>
               </span>
             </Link>
           </Flex>
@@ -89,9 +42,9 @@ export function HomePageContent({ isAuthenticated, authStatusContent }: HomePage
             <Text color="gray" align="center" mb="3">
               Discover promising projects and opportunities to invest in the next big thing.
             </Text>
-            <Link href="/investors">
+            <Link href="/leaderboard">
               <span>
-                <Text color="blue">Learn more</Text>
+                <Text color="blue">View Leaderboard</Text>
               </span>
             </Link>
           </Flex>
